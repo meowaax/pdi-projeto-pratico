@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Saídas geradas pelo pipeline (mantém só a pasta)
+outputs/*
+!outputs/.gitkeep
