@@ -95,3 +95,77 @@ def test_real_picos_preservados_com_sigma_padrao(reais, nome):
     topo_ref = np.flatnonzero(ref.any(axis=1))[[0, -1]]
     topo_new = np.flatnonzero(e.mascara.any(axis=1))[[0, -1]]
     assert np.abs(topo_ref - topo_new).max() <= 2
+
+
+# ----------------------------------------------------------------------------
+# Afinamento e métricas
+# ----------------------------------------------------------------------------
+def test_afinar_reduz_a_linha_grossa_a_um_pixel():
+    cob = np.zeros((30, 80))
+    cob[12:18, :] = 1.0                       # barra de 6 px
+    e = structure.realcar_curva(cob, sigma=0.6)
+    assert structure.tem_espessura_um(e.esqueleto)
+    assert e.esqueleto[:, 20].sum() == 1      # um pixel por coluna
+    assert 13 <= np.flatnonzero(e.esqueleto[:, 20])[0] <= 16   # no meio da barra
+
+
+def test_esqueleto_esta_dentro_da_mascara_e_e_conexo():
+    cob = np.zeros((40, 100))
+    ys = (20 + 10 * np.sin(np.arange(100) / 8.0)).astype(int)
+    for x, y in enumerate(ys):
+        cob[y:y + 3, x] = 1.0
+    e = structure.realcar_curva(cob, sigma=0.6)
+    assert not (e.esqueleto & ~e.mascara).any()
+    assert structure._componentes(e.esqueleto) == 1
+    assert e.esqueleto.any(axis=0).all()
+
+
+def test_tem_espessura_um_detecta_blocos_2x2():
+    assert structure.tem_espessura_um(np.eye(5, dtype=bool))
+    bloco = np.zeros((5, 5), dtype=bool)
+    bloco[1:3, 1:3] = True
+    assert not structure.tem_espessura_um(bloco)
+
+
+def test_metricas_de_uma_mascara_igual_a_referencia():
+    cob = linha_horizontal(espessura=3)
+    e = structure.realcar_curva(cob, sigma=0.6, limiar=0.5)
+    m = structure.metricas(cob > 0.5, e)
+    assert m["componentes"] == 1 and m["colunas_vazias"] == 0
+    assert m["erro_extremos_px"] < 1.0
+
+
+def test_metricas_acusam_pico_alongado_pelo_borramento():
+    cob = np.zeros((60, 60))
+    cob[10:50, 30] = 1.0                       # pico vertical de 1 px de largura
+    cob[48:50, :] = 1.0
+    ref = cob > 0.5
+    fino = structure.metricas(ref, structure.realcar_curva(cob, 0.6, 0.06))
+    largo = structure.metricas(ref, structure.realcar_curva(cob, 2.0, 0.02))
+    assert abs(largo["vies_pico_px"]) > abs(fino["vies_pico_px"])
+    assert largo["espessura_mediana_px"] >= fino["espessura_mediana_px"]
+
+
+def test_varrer_parametros_devolve_uma_linha_por_combinacao():
+    cob = linha_horizontal(espessura=3)
+    tabela = structure.varrer_parametros(cob, cob > 0.5, [0.6, 1.0], [0.06, "otsu"])
+    assert len(tabela) == 4
+    assert {(t["sigma"], t["limiar_param"]) for t in tabela} == {(0.6, 0.06), (0.6, "otsu"), (1.0, 0.06), (1.0, "otsu")}
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_esqueleto_fino_conexo_e_cobre_todas_as_colunas(reais, nome):
+    _, e = reais[nome]
+    assert structure.tem_espessura_um(e.esqueleto)
+    assert structure._componentes(e.esqueleto) == 1
+    assert e.esqueleto.any(axis=0).all()
+    assert not (e.esqueleto & ~e.mascara).any()
+    assert e.esqueleto.sum() < 0.5 * e.mascara.sum()
+
+
+def test_afinar_nao_encurta_as_pontas_do_traco():
+    m = np.zeros((20, 50), dtype=bool)
+    m[8:12, :] = True                       # barra que encosta nas duas bordas laterais
+    sk = structure.afinar(m)
+    assert sk[:, 0].any() and sk[:, -1].any()
+    assert sk.any(axis=0).all()
