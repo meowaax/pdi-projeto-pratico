@@ -1,10 +1,12 @@
 """Testes da remoção de anotações azuis (casos sintéticos)."""
 import logging
 
+import cv2
 import numpy as np
 import pytest
+from scipy import ndimage as ndi
 
-from src import cleaning
+from src import cleaning, config, roi
 
 AZUL = (20, 20, 220)
 
@@ -103,3 +105,77 @@ def test_nao_altera_a_entrada():
     antes = img.copy()
     cleaning.limpar_recorte(img)
     np.testing.assert_array_equal(img, antes)
+
+
+# ----------------------------------------------------------------------------
+# Figure1.png real
+# ----------------------------------------------------------------------------
+# Anotações esperadas por painel: a = S1, S2 e as 7 letras de "systole"; b = S1, SM, S2; c = S1, VSD, S2.
+ANOTACOES_ESPERADAS = {"a": 9, "b": 3, "c": 3}
+
+
+@pytest.fixture(scope="module")
+def reais():
+    rgb = cv2.imread(str(config.FIGURA), cv2.IMREAD_COLOR)[:, :, ::-1].copy()
+    saida = {}
+    for p in roi.segmentar_paineis(rgb, usar_fallback=False):
+        recorte = roi.recortar(rgb, p)
+        saida[p.nome] = (p, recorte, cleaning.remover_grade(recorte), cleaning.limpar_recorte(recorte))
+    return saida
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_numero_de_anotacoes_removidas(reais, nome):
+    assert len(reais[nome][3].anotacoes) == ANOTACOES_ESPERADAS[nome]
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_resta_um_unico_componente_que_atravessa_o_painel(reais, nome):
+    p, recorte, _, r = reais[nome]
+    n, _, est, _ = cv2.connectedComponentsWithStats(r.mascara.astype(np.uint8), connectivity=8)
+    assert n - 1 == 1
+    assert est[1, cv2.CC_STAT_WIDTH] == recorte.shape[1]
+    assert r.largura_coberta == 1.0
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_nenhum_pixel_da_curva_foi_apagado(reais, nome):
+    _, _, sem_grade, r = reais[nome]
+    rotulos, curva, _, _ = cleaning.classificar_componentes(sem_grade.mascara)
+    np.testing.assert_array_equal(r.mascara, rotulos == curva)
+    # e a cobertura da curva é a mesma de antes
+    np.testing.assert_array_equal(r.cobertura[r.mascara], sem_grade.cobertura[r.mascara])
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_anotacoes_ficam_longe_da_curva(reais, nome):
+    # Margem que justifica separar por componentes: nenhuma letra encosta na curva.
+    _, _, sem_grade, r = reais[nome]
+    rotulos, curva, anotacoes, _ = cleaning.classificar_componentes(sem_grade.mascara)
+    distancia = ndi.distance_transform_edt(rotulos != curva)
+    for i in anotacoes:
+        assert distancia[rotulos == i].min() >= 5.0
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_nao_sobra_texto_nem_eixo(reais, nome):
+    p, recorte, _, r = reais[nome]
+    # nada na faixa da legenda "Diaphragm mode; Normalized" além da própria curva
+    x0, y0, _, _ = p.roi
+    lx0, ly0, lx1, ly1 = config.PAINEIS[nome]["legenda"]
+    legenda = r.mascara[ly0 - y0:ly1 - y0 + 1, lx0 - x0:lx1 - x0 + 1]
+    assert legenda.sum() == 0
+    # nenhuma coluna é uma linha vertical (eixo ou borda): a curva nunca ocupa >90% da altura de uma coluna
+    assert r.mascara.sum(axis=0).max() < 0.9 * r.mascara.shape[0]
+
+
+def test_real_barra_do_painel_c_fica_fora_da_roi(reais):
+    # À direita do painel c há uma barra azul-escura (x1+3 a x1+5) que não pode entrar no recorte.
+    p, recorte, _, r = reais["c"]
+    assert not r.mascara[:, -1].all()
+    assert r.mascara[:, -3:].sum(axis=0).max() < 0.5 * r.mascara.shape[0]
+    rgb = cv2.imread(str(config.FIGURA), cv2.IMREAD_COLOR)[:, :, ::-1]
+    x1 = p.roi[2]
+    barra = cleaning.azulado(rgb[p.roi[1]:p.roi[3] + 1, x1 + 1:x1 + 8]) > cleaning.LIMIAR_AZUL
+    assert barra.any(axis=0).sum() >= 1                   # a barra existe logo à direita
+    assert barra[:, 0].sum() < 0.5 * barra.shape[0]       # mas não toca a coluna x1 + 1 da ROI
