@@ -130,3 +130,33 @@ def test_fallback_usa_o_config_quando_a_deteccao_falha(caplog):
 def test_paineis_sao_imutaveis(paineis):
     with pytest.raises(Exception):
         paineis[0].roi = (0, 0, 1, 1)
+
+
+def test_recorte_tem_o_tamanho_da_roi(rgb, paineis):
+    for p in paineis:
+        x0, y0, x1, y1 = p.roi
+        assert roi.recortar(rgb, p).shape == (y1 - y0 + 1, x1 - x0 + 1, 3)
+
+
+def test_recorte_nao_contem_a_faixa_de_rotulos_nem_a_legenda_da_figura(rgb, paineis):
+    # A faixa de rótulos de tempo é um fundo cinza 240 quase uniforme; não pode aparecer no recorte.
+    for p in paineis:
+        recorte = roi.recortar(rgb, p)
+        linhas_cinza = (roi.mascara_cinza(recorte).sum(axis=1) > 0.9 * recorte.shape[1])
+        assert not np.any(np.convolve(linhas_cinza, np.ones(8), mode="valid") == 8)
+
+
+def test_desenhar_rois_nao_altera_a_original(rgb, paineis):
+    antes = rgb.copy()
+    saida = roi.desenhar_rois(rgb, paineis)
+    np.testing.assert_array_equal(rgb, antes)
+    assert saida.shape == rgb.shape
+    assert not np.array_equal(saida, rgb)
+
+
+def test_demo_gera_os_arquivos(tmp_path, monkeypatch):
+    import demo_roi
+    monkeypatch.setattr(config, "SAIDA", tmp_path)
+    demo_roi.main()
+    for nome in ("roi_a.png", "roi_b.png", "roi_c.png", "rois_detectadas.png"):
+        assert (tmp_path / nome).exists()

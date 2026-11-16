@@ -194,3 +194,20 @@ def segmentar_paineis(rgb, usar_fallback=True):
             raise
         log.warning("Detecção automática falhou (%s). Usando coordenadas do config.", erro)
         return [_painel_do_config(n) for n in nomes]
+
+
+def recortar(rgb, painel):
+    """Recorte do interior do gráfico (a ROI é inclusiva em x1 e y1)."""
+    x0, y0, x1, y1 = painel.roi
+    return rgb[y0:y1 + 1, x0:x1 + 1]
+
+
+def desenhar_rois(rgb, paineis, cor=(255, 0, 0), espessura=1):
+    """Cópia da figura com o retângulo da ROI e o nome de cada painel."""
+    import cv2  # só esta função de visualização depende do OpenCV
+    saida = np.ascontiguousarray(rgb.copy())
+    for p in paineis:
+        x0, y0, x1, y1 = p.roi
+        cv2.rectangle(saida, (x0, y0), (x1, y1), cor, espessura)
+        cv2.putText(saida, p.nome, (x0 + 4, y0 + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor, 2)
+    return saida
