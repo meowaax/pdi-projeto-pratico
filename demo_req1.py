@@ -1,9 +1,10 @@
-"""Demo do Requisito 1: aplica média, Gaussiano e Sobel com correlate2d_manual.
+"""Demo dos Requisitos 1 e 3: média, Gaussiano e Sobel com correlate2d_manual.
 
 Entradas : Imagens/Shapes.png e Imagens/testpat.1k.color2.tif
-Saída    : outputs/req1/<imagem>_<filtro>.png e outputs/req1/resumo.png
+Saída    : outputs/req1/<imagem>_<filtro>.png, outputs/req1/resumo.png
+           e outputs/req1/shapes_bordas.png (mapa de bordas do Shapes.png)
 
-Os kernels abaixo são locais ao demo. A Task 3 cria o módulo definitivo de máscaras.
+Os kernels e filtros vêm de src/kernels.py e src/filters.py.
 """
 import time
 from pathlib import Path
@@ -16,6 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from src.correlation import correlate2d_manual
+from src.filters import bordas_sobel, gradiente_sobel, suavizar_gaussiano
+from src.kernels import kernel_media
 
 RAIZ = Path(__file__).parent
 SAIDA = RAIZ / "outputs" / "req1"
@@ -28,18 +31,6 @@ def para_cinza(bgr):
     return 0.299 * r + 0.587 * g + 0.114 * b
 
 
-def kernel_gaussiano(tamanho, sigma):
-    eixo = np.arange(tamanho) - (tamanho - 1) / 2
-    g = np.exp(-(eixo[:, None] ** 2 + eixo[None, :] ** 2) / (2 * sigma ** 2))
-    return g / g.sum()
-
-
-SOBEL_X = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float64)
-SOBEL_Y = SOBEL_X.T
-MEDIA_5 = np.ones((5, 5)) / 25.0
-GAUSS_7 = kernel_gaussiano(7, 1.5)
-
-
 def normalizar(x):
     """Leva qualquer resultado para uint8 [0, 255] só para visualização."""
     x = x - x.min()
@@ -47,24 +38,36 @@ def normalizar(x):
 
 
 def processar(caminho):
-    bgr = cv2.imread(str(caminho), cv2.IMREAD_COLOR)
-    cinza = para_cinza(bgr)
+    cinza = para_cinza(cv2.imread(str(caminho), cv2.IMREAD_COLOR))
     t0 = time.perf_counter()
-    gx = correlate2d_manual(cinza, SOBEL_X)
-    gy = correlate2d_manual(cinza, SOBEL_Y)
+    gx, gy, magnitude, _ = gradiente_sobel(cinza)
     resultados = {
         "original": cinza,
-        "media_5x5": correlate2d_manual(cinza, MEDIA_5),
-        "gaussiano_7x7_s1.5": correlate2d_manual(cinza, GAUSS_7),
+        "media_5x5": correlate2d_manual(cinza, kernel_media(5)),
+        "gaussiano_s1.5": suavizar_gaussiano(cinza, 1.5),
         "sobel_x": gx,
         "sobel_y": gy,
-        "sobel_magnitude": np.hypot(gx, gy),
+        "sobel_magnitude": magnitude,
     }
-    dt = time.perf_counter() - t0
-    print(f"{caminho.name}: {cinza.shape}, 5 correlações em {dt:.3f} s")
+    print(f"{caminho.name}: {cinza.shape}, 5 filtros em {time.perf_counter() - t0:.3f} s")
     for nome, img in resultados.items():
         cv2.imwrite(str(SAIDA / f"{caminho.stem}_{nome}.png"), normalizar(img))
     return resultados
+
+
+def mapa_de_bordas_shapes():
+    """Triângulo, quadrado e losango: borda com e sem suavização prévia."""
+    cinza = para_cinza(cv2.imread(str(IMAGENS[0]), cv2.IMREAD_COLOR))
+    fig, axs = plt.subplots(1, 3, figsize=(18, 3.2))
+    for ax, (titulo, img) in zip(axs, [("original", cinza),
+                                       ("bordas Sobel", bordas_sobel(cinza)),
+                                       ("bordas Sobel (Gaussiano σ=1.5 antes)", bordas_sobel(cinza, sigma=1.5))]):
+        ax.imshow(img, cmap="gray")
+        ax.set_title(titulo)
+        ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(SAIDA / "shapes_bordas.png", dpi=100)
+    plt.close(fig)
 
 
 def main():
@@ -78,6 +81,7 @@ def main():
     fig.tight_layout()
     fig.savefig(SAIDA / "resumo.png", dpi=90)
     plt.close(fig)
+    mapa_de_bordas_shapes()
     print(f"Resultados em {SAIDA}")
 
 
