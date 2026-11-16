@@ -9,10 +9,9 @@ cobertura, então o zero padding da correlação equivale a continuar o fundo br
 Por que σ pequeno
 -----------------
 O traço tem 2 a 3 px de espessura e os picos de S1/S2 têm 1 px de largura. Um Gaussiano
-largo achata esses picos e engrossa a curva, o que distorce a amplitude do áudio. A figura
-já chega sem o ruído de compressão (ele foi cortado pelo limiar de azulado na Task 5),
-então a suavização só precisa fechar as falhas de 1 px do antialiasing. Os valores padrão
-vieram da varredura de σ e do limiar documentada em docs/filtragem_sigma.md.
+largo achata esses picos e engrossa a curva, o que distorce a amplitude do áudio. Os
+valores padrão (σ = 1,0 com limiar de Otsu) vieram da varredura de σ e de limiar
+documentada em docs/filtragem_sigma.md: foi a combinação com menor viés nos picos.
 """
 from dataclasses import dataclass
 
@@ -23,8 +22,8 @@ from skimage.morphology import skeletonize
 
 from src.filters import bordas_sobel, suavizar_gaussiano
 
-SIGMA_PADRAO = 0.6      # kernel 5x5 (±3σ)
-LIMIAR_PADRAO = 0.06    # fração da cobertura máxima suavizada acima da qual há curva
+SIGMA_PADRAO = 1.0      # kernel 7x7 (±3σ)
+LIMIAR_PADRAO = "otsu"  # limiar de Otsu sobre a cobertura suavizada (ou um número em (0, 1))
 
 
 @dataclass(frozen=True)

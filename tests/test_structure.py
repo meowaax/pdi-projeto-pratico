@@ -169,3 +169,14 @@ def test_afinar_nao_encurta_as_pontas_do_traco():
     sk = structure.afinar(m)
     assert sk[:, 0].any() and sk[:, -1].any()
     assert sk.any(axis=0).all()
+
+
+@pytest.mark.parametrize("nome", ["a", "b", "c"])
+def test_real_mascara_fiel_aos_extremos_da_curva_original(reais, nome):
+    # Com os parâmetros padrão (σ = 1,0 e Otsu), topo e base de cada coluna ficam a menos de 2 px do original,
+    # e o viés dos picos de S1/S2 é de no máximo 2 px (cerca de 2% de amplitude).
+    so_curva, e = reais[nome]
+    m = structure.metricas(so_curva.mascara, e)
+    assert m["erro_extremos_px"] < 2.0
+    assert abs(m["vies_pico_px"]) < 2.0
+    assert m["componentes"] == 1 and m["colunas_vazias"] == 0
