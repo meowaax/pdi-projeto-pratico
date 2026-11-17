@@ -134,6 +134,26 @@ def razao_db(a, b):
     return float(20.0 * np.log10(a / b))
 
 
+def periodicidade(x, fs=FS, faixa=(60.0, 400.0)):
+    """Quão periódico é o trecho: o maior pico da autocorrelação normalizada para períodos de `faixa` (Hz).
+
+    Retorna (coeficiente, frequência em Hz). Perto de 1 é um sinal que se repete (um tom ou um trem de pulsos);
+    perto de 0 é ruído. A autocorrelação é calculada pela FFT, com zero padding para não ser circular, e
+    normalizada pelo valor em atraso zero (sem corrigir o encurtamento da sobreposição).
+    """
+    x = np.asarray(x, dtype=np.float64)
+    x = x - x.mean()
+    n = x.size
+    kmin, kmax = int(np.ceil(fs / faixa[1])), min(int(np.floor(fs / faixa[0])), n - 1)
+    if n < 8 or kmin >= kmax or not x.any():
+        raise ValueError("trecho curto demais ou sem variação para medir a periodicidade")
+    espectro = np.fft.rfft(x, 2 * n)
+    ac = np.fft.irfft(np.abs(espectro) ** 2)[:n]
+    ac = ac / ac[0]
+    k = kmin + int(np.argmax(ac[kmin:kmax + 1]))
+    return float(ac[k]), float(fs / k)
+
+
 def metricas_tempo(sinal, eventos):
     """Níveis em cada janela e razões entre elas. Todos os níveis estão em % da escala do gráfico."""
     jan = janelas(sinal, eventos)
@@ -143,6 +163,7 @@ def metricas_tempo(sinal, eventos):
     pico, geral = float(np.abs(y).max()), rms(y)
     sop = y[jan["sopro"]]
     cruzamentos = np.count_nonzero(np.diff(np.signbit(sop - sop.mean()).astype(np.int8)))
+    periodicidade_sopro, freq_periodica = periodicidade(sop)
     return {
         "pico_pct": pico,
         "rms_pct": geral,
@@ -155,6 +176,8 @@ def metricas_tempo(sinal, eventos):
         "sopro_sobre_diastole_db": razao_db(nivel["sopro"], nivel["diastole"]),
         "sopro_sobre_s1_db": razao_db(nivel["sopro"], nivel["s1"]),
         "cruzamentos_por_zero_sopro_hz": float(cruzamentos / (2.0 * len(sop) / FS)) if len(sop) else 0.0,
+        "periodicidade_sopro": periodicidade_sopro,
+        "frequencia_periodica_sopro_hz": freq_periodica,
     }
 
 

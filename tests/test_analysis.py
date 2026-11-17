@@ -106,6 +106,27 @@ def test_metricas_de_senoide_pura_na_janela():
     assert m["intervalo_s1_s2_ms"] == pytest.approx(250)
 
 
+def test_periodicidade_de_tom_puro_e_de_ruido():
+    coef, freq = analysis.periodicidade(tom(120.0, n=900))
+    assert coef > 0.8 and freq == pytest.approx(120, abs=3)
+    ruido = np.random.default_rng(3).normal(size=900)
+    assert analysis.periodicidade(ruido)[0] < 0.3
+
+
+def test_periodicidade_de_trem_de_pulsos():
+    x = np.zeros(1000)
+    x[::40] = 1.0                                          # um pulso a cada 8 ms = 125 Hz
+    coef, freq = analysis.periodicidade(x)
+    assert freq == pytest.approx(125, abs=1) and coef > 0.8
+
+
+def test_periodicidade_rejeita_trecho_inutil():
+    with pytest.raises(ValueError):
+        analysis.periodicidade(np.zeros(500))
+    with pytest.raises(ValueError):
+        analysis.periodicidade(np.ones(4))
+
+
 def test_sopro_sobre_diastole_e_positivo_quando_ha_sopro_e_nulo_quando_nao_ha():
     ev = analysis.Eventos(2.12, 2.37)
     com = analysis.metricas_tempo(sinal_com_s1_s2(ruido_sopro=6.0), ev)
@@ -163,6 +184,14 @@ def test_real_vsd_tem_sopro_holossistolico_forte(reais):
     assert -12 < reais["b"][2]["sopro_sobre_s1_db"] < -3
     assert reais["a"][2]["sopro_sobre_s1_db"] < -15
     assert reais["c"][2]["rms_sopro_pct"] > 3 * reais["b"][2]["rms_sopro_pct"]
+
+
+def test_real_still_e_periodico_e_vsd_e_ruidoso(reais):
+    normal, still, vsd = (reais[n][2] for n in "abc")
+    assert still["periodicidade_sopro"] > 0.5 and still["frequencia_periodica_sopro_hz"] == pytest.approx(120, abs=6)
+    assert vsd["periodicidade_sopro"] < 0.3
+    assert normal["periodicidade_sopro"] < 0.4
+    assert still["periodicidade_sopro"] > 2 * vsd["periodicidade_sopro"]
 
 
 def test_real_niveis_batem_com_o_demo_de_audio(reais):
