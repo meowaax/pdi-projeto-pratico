@@ -9,30 +9,23 @@ Uso: python demo_audio.py
 """
 import logging
 
-import cv2
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src import audio, config, synthetic
-from src.cleaning import limpar_recorte
-from src.curve import Calibracao, extrair_sinal
-from src.roi import recortar, segmentar_paineis
+from src import audio, config, pipeline, synthetic
+from src.curve import extrair_sinal
 from src.structure import realcar_curva
 
 SAIDA = config.SAIDA / "audio"
 
 
 def extrair_sinais():
-    """Roda a cadeia das Tasks 4 a 8 e devolve {'a': sinal, 'b': sinal, 'c': sinal}."""
-    rgb = cv2.imread(str(config.FIGURA), cv2.IMREAD_COLOR)[:, :, ::-1].copy()
-    sinais = {}
-    for p in segmentar_paineis(rgb, usar_fallback=False):
-        estrutura = realcar_curva(limpar_recorte(recortar(rgb, p)).cobertura)
-        sinais[p.nome] = extrair_sinal(estrutura.mascara, Calibracao.de_painel(p))
-    return sinais
+    """Roda a cadeia das Tasks 4 a 8 (src/pipeline.py) e devolve {'a': sinal, 'b': sinal, 'c': sinal}."""
+    resultados = pipeline.processar_figura(pipeline.carregar_figura(config.FIGURA))
+    return {r.nome: r.sinal for r in resultados}
 
 
 def comparar_metodos():

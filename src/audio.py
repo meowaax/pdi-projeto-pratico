@@ -16,7 +16,7 @@ from src import config
 
 METODOS = ("linear", "cubica")
 NORMALIZACOES = ("pico", "escala")
-ALVO_PADRAO = 0.95       # fração do fundo de escala (-0,45 dBFS), deixa folga contra clipping
+ALVO_PADRAO = config.ALVO_NORMALIZACAO   # fração do fundo de escala (0,95 = -0,45 dBFS), com folga contra clipping
 PCM_MAX = 32767          # escala simétrica: +1,0 -> 32767 e -1,0 -> -32767
 
 
