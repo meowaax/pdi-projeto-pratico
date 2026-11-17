@@ -4,6 +4,13 @@ __pycache__/
 .venv/
 .pytest_cache/
 
+# Arquivos auxiliares do LaTeX (o PDF do relatório é versionado)
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.synctex.gz
+
 # Saídas geradas pelo pipeline (mantém só a pasta)
 outputs/*
 !outputs/.gitkeep

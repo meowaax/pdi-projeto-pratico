@@ -79,3 +79,53 @@ def test_tabelas_do_repositorio_estao_atualizadas(gerado):
 def test_gerar_nao_altera_o_demo_analise(gerado):
     import demo_analise
     assert demo_analise.SAIDA.name == "analise"
+
+
+# ----------------------------------------------------------------------------
+# O texto do relatório
+# ----------------------------------------------------------------------------
+import shutil
+import subprocess
+
+TEX = RAIZ / "report" / "relatorio.tex"
+SECOES = sorted((RAIZ / "report" / "secoes").glob("*.tex"))
+
+
+def texto_do_relatorio():
+    return "\n".join(p.read_text(encoding="utf-8") for p in [TEX, *SECOES])
+
+
+def test_relatorio_tem_as_secoes_exigidas_pela_especificacao():
+    texto = texto_do_relatorio()
+    for secao in ("Introdução", "Materiais e métodos", "Resultados", "Discussão", "Conclusão"):
+        assert f"\\section{{{secao}}}" in texto, secao
+
+
+def test_figuras_e_tabelas_citadas_existem():
+    texto = texto_do_relatorio()
+    for caminho in re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", texto):
+        assert (RAIZ / "report" / caminho).exists(), caminho
+    for caminho in re.findall(r"\\input\{(gerado/[^}]+)\}", texto):
+        assert (RAIZ / "report" / f"{caminho}.tex").exists() or (RAIZ / "report" / caminho).exists(), caminho
+
+
+def test_todas_as_citacoes_tem_referencia():
+    texto = texto_do_relatorio()
+    citadas = {c.strip() for grupo in re.findall(r"\\cite\{([^}]+)\}", texto) for c in grupo.split(",")}
+    definidas = set(re.findall(r"\\bibitem\{([^}]+)\}", texto))
+    assert citadas and citadas <= definidas
+    assert definidas <= citadas, "referência listada e nunca citada"
+
+
+@pytest.mark.skipif(shutil.which("pdflatex") is None, reason="pdflatex não instalado")
+def test_relatorio_compila_sem_referencias_indefinidas(tmp_path):
+    copia = tmp_path / "report"
+    shutil.copytree(RAIZ / "report", copia, ignore=shutil.ignore_patterns("*.pdf", "*.aux", "*.log", "*.out", "*.toc", "__pycache__"))
+    for _ in range(2):
+        r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "relatorio.tex"], cwd=copia,
+                           capture_output=True, text=True, timeout=300)
+        assert r.returncode == 0, r.stdout[-2000:]
+    log = (copia / "relatorio.log").read_text(encoding="utf-8", errors="replace")
+    assert "undefined" not in log
+    assert "Overfull \\hbox" not in log or all(float(x) < 20 for x in re.findall(r"Overfull \\hbox \(([\d.]+)pt too wide", log))
+    assert (copia / "relatorio.pdf").stat().st_size > 50_000
