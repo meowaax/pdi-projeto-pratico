@@ -1,2 +1,200 @@
 \section{Resultados}
-% seção em redação
+
+\subsection{Correlação bidimensional}
+
+A Figura~\ref{fig:filtros} mostra a correlação manual aplicada às duas imagens do Requisito~1 com a máscara de média $5\times 5$, a gaussiana ($\sigma=1{,}5$) e o filtro de Sobel. Na \texttt{Shapes.png}, o Sobel em $x$ responde apenas nas bordas verticais e inclinadas das formas, com sinal positivo na passagem de escuro para claro, e a magnitude desenha o contorno do triângulo, do quadrado e do losango com uma linha fina. Na \texttt{testpat.1k.color2.tif}, convertida para tons de cinza (luminância $0{,}299R+0{,}587G+0{,}114B$), a média e o gaussiano borram as listras finas, e o Sobel realça as bordas dos blocos, das listras e os detalhes da foto. A Figura~\ref{fig:bordas-shapes} mostra o efeito de suavizar com o gaussiano antes do Sobel: as bordas ficam mais grossas e mais suaves.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/filtros.png}
+\caption{Correlação manual em \texttt{Shapes.png} (acima) e \texttt{testpat.1k.color2.tif} (abaixo): original, média $5\times5$, gaussiano $\sigma=1{,}5$, Sobel em $x$ e magnitude do gradiente.}
+\label{fig:filtros}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/bordas_shapes.png}
+\caption{Bordas de \texttt{Shapes.png} pelo Sobel, sem suavização e com o gaussiano ($\sigma=1{,}5$) antes.}
+\label{fig:bordas-shapes}
+\end{figure}
+
+Nos testes, a versão rápida da função reproduz a versão de quatro laços e as funções de referência dentro de $10^{-9}$ em imagens aleatórias de $20\times 25$ pixels: o \texttt{scipy.signal.\allowbreak correlate2d} com máscaras de $3\times 3$ a $9\times 9$ e de formatos $3\times 5$, $7\times 1$ e $1\times 7$, e o \texttt{cv2.filter2D}, que também cobre máscaras de tamanho par ($2\times 2$, $4\times 4$, $2\times 3$ e $4\times 5$). Com a \texttt{Shapes.png}, a concordância com o \texttt{cv2.filter2D} também vale dentro de $10^{-9}$, para o Sobel e para a média, e na imagem colorida ela vale por canal, dentro de $10^{-6}$. Com uma imagem de uns e uma máscara de uns $3\times 3$, a saída vale 9 no interior, 6 nas bordas e 4 nos cantos, o que confere o preenchimento por zeros. A resposta ao impulso é a máscara girada de $180^\circ$, como prevê a Equação~\ref{eq:correlacao}. Cinco filtros em uma imagem de $1024\times 1024$ levam cerca de 0,07~s.
+
+\subsection{Segmentação dos gráficos}
+
+A segmentação automática encontra os três gráficos e as suas calibrações (Tabela~\ref{tab:calibracao}, Figura~\ref{fig:rois}). As ROIs são idênticas às medidas na exploração dos dados, e os gráficos têm 1332 a 1333 colunas por segundo. A escala vertical mostra a diferença que motivou a calibração por gráfico: 1,14 linha por 1\% em (a) e 1,06 em (b) e (c). A detecção não usa coordenadas fixas: um teste cerca a figura com uma moldura branca e confere que as ROIs se deslocam junto.
+
+\begin{table}[H]
+\centering
+\small
+\resizebox{\textwidth}{!}{\input{gerado/tab_calibracao.tex}}
+\caption{ROI e calibração de cada gráfico, obtidas automaticamente. A coluna ``Colunas/s'' é a resolução horizontal, e ``Linhas por 1\%'' é a resolução vertical.}
+\label{tab:calibracao}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{figuras/rois.png}
+\caption{ROIs detectadas (retângulos vermelhos). As legendas ``(a)'', ``(b)'' e ``(c)'' e a descrição da figura ficam de fora.}
+\label{fig:rois}
+\end{figure}
+
+\subsection{Remoção da grade, dos eixos, dos textos e das anotações}
+
+A Figura~\ref{fig:limpeza} mostra, para os três gráficos, o recorte original, o resultado da remoção da grade e o sinal limpo. Depois da primeira etapa, a grade, os eixos, os números e a legenda preta somem por completo e só restam a curva e as anotações azuis. Nenhum pixel neutro sobrevive. Em um teste com uma curva sintética desenhada com e sem grade, a cobertura calculada difere em menos de 0,03, e nos dados reais a curva continua formando um só componente que atravessa toda a largura do gráfico, inclusive nos cruzamentos com a grade. A segunda etapa remove 9 anotações no gráfico (a) (\Sone, \Stwo{} e as 7 letras de \emph{systole}), 3 no (b) (\Sone, SM e \Stwo) e 3 no (c) (\Sone, VSD e \Stwo). Depois dela, resta um único componente por gráfico, sem nenhum pixel da curva apagado. A anotação mais próxima da curva fica a 6,3~pixels dela (no gráfico~(c)), e por isso a separação por componentes conexos é possível aqui.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/limpeza.png}
+\caption{Etapas de limpeza nos três gráficos: recorte original, sem grade (nem eixos, números e legenda) e sinal limpo (sem as anotações).}
+\label{fig:limpeza}
+\end{figure}
+
+\subsection{Suavização, bordas e escolha de $\sigma$}
+\label{sec:res-realce}
+
+A Figura~\ref{fig:estrutura} mostra as etapas do realce no gráfico (c), o mais difícil, por ser o mais denso. O Gaussiano fecha as falhas de 1 pixel do antialiasing, o Sobel marca as duas bordas de cada traço, a binarização por Otsu recupera a curva com 4 a 5 pixels de espessura (15 no gráfico denso, onde as oscilações se sobrepõem) e o afinamento reduz o traço a 1 pixel.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figuras/estrutura_c.png}
+\caption{Gráfico (c): sinal limpo, suavizado, mapa de bordas de Sobel, binarizado por Otsu e esqueleto de 1 pixel.}
+\label{fig:estrutura}
+\end{figure}
+
+O valor de $\sigma$ foi escolhido medindo, para cada valor, o erro da máscara binarizada em relação à curva original (Tabela~\ref{tab:sigma}). O erro é a diferença média entre o topo e a base de cada coluna, e o viés é o erro médio nas 40 colunas de maior extensão vertical (os picos de \Sone{} e \Stwo): positivo quando o pico fica mais baixo que o original, e negativo quando fica mais alto. Com $\sigma=1{,}0$ e o limiar de Otsu, o erro médio é de 0,55, 0,56 e 1,58 pixel nos gráficos (a), (b) e (c), e o viés dos picos é de $-1{,}2$, $-0{,}4$ e $+0{,}3$ pixel, ou seja, cerca de 1\% de amplitude. Com $\sigma\ge 1{,}5$ o viés vai de $-4{,}8$ a $-18{,}3$ pixels: o borramento alonga os picos e distorceria a amplitude do áudio. Com $\sigma\le 0{,}8$, o limiar de Otsu fica mais alto e os picos ficam achatados, com viés de $+1{,}6$ a $+11{,}1$ pixels. A curva fica contínua, em um só componente e sem colunas vazias, com $\sigma=1{,}0$.
+
+\begin{table}[H]
+\centering
+\small
+\input{gerado/tab_sigma.tex}
+\caption{Erro médio dos extremos por coluna e viés dos picos, em pixels, para cada $\sigma$ com o limiar de Otsu. A linha marcada com $\star$ é a adotada.}
+\label{tab:sigma}
+\end{table}
+
+O esqueleto de 1 pixel não serve para medir a amplitude: ele encurta as pontas dos picos e junta traços vizinhos, e erra os extremos de cada coluna em média 3 pixels nos gráficos (a) e (b) e 8 pixels no (c), com erros de até 125 pixels. A máscara binarizada erra de 0,5 a 1,6 pixel. Por isso a extração usa os extremos da máscara.
+
+\subsection{Extração da curva}
+\label{sec:res-extracao}
+
+A Tabela~\ref{tab:regras} compara as duas regras de extração por coluna nos sinais sintéticos de gabarito conhecido (média de quatro sinais de cada tipo). A regra ``picos'' mantém a amplitude dos picos (razão de 1,00 a 1,02), enquanto o ponto médio ``centro'' perde cerca de um terço dela (razão de 0,67 a 0,68). Nos sinais com estouros (\emph{burst}) e com sopro, o erro cai de 0,34 para 0,19 e de 0,40 para 0,24. No sinal denso, as duas regras têm a mesma correlação (0,78) e o ponto médio erra um pouco menos no total (0,64 contra 0,67), mas perde um terço do pico. A correlação baixa nesse caso mostra o limite do método: as oscilações são mais rápidas que a resolução da figura.
+
+\begin{table}[H]
+\centering
+\small
+\input{gerado/tab_regras.tex}
+\caption{Reconstrução de sinais sintéticos por tipo de sinal e regra de extração, comparada a 5~kHz com o sinal original: correlação, erro quadrático médio relativo (NRMSE) e razão entre as amplitudes dos picos.}
+\label{tab:regras}
+\end{table}
+
+As Figuras~\ref{fig:extracao-a}, \ref{fig:extracao-b} e \ref{fig:extracao-c} mostram a curva extraída sobre o recorte original e o sinal calibrado. No gráfico (a), \Sone{} chega a $+74\%$ em 5,795~s, e \Stwo{} vai de $+93\%$ a $-73\%$ em 6,047~s, o que concorda com a leitura direta da figura (cerca de 75\% e de 92\% a $-72\%$). No gráfico (b), os extremos são $+44\%$ e $-55\%$, e no (c), $+88\%$ e $-85\%$, perto de 1,33~s. Nos três gráficos, toda coluna tem curva e nenhum valor ultrapassa a escala de $\pm100\%$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figuras/extracao_a.png}
+\caption{Gráfico (a), Normal: curva extraída (vermelho) sobre o recorte e sinal calibrado.}
+\label{fig:extracao-a}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figuras/extracao_b.png}
+\caption{Gráfico (b), Still: curva extraída (vermelho) sobre o recorte e sinal calibrado.}
+\label{fig:extracao-b}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figuras/extracao_c.png}
+\caption{Gráfico (c), VSD: curva extraída (vermelho) sobre o recorte e sinal calibrado.}
+\label{fig:extracao-c}
+\end{figure}
+
+\subsection{Arquivos de áudio}
+
+O programa grava \texttt{normal.wav}, \texttt{still.wav} e \texttt{vsd.wav} (Tabela~\ref{tab:audio}). Cada arquivo tem 2500 amostras a 5000~Hz, em 16 bits e um canal, o que dá 0,5~s e 5044 bytes (44 do cabeçalho e 5000 de dados). Os arquivos foram relidos com o módulo \texttt{wave} e com o \texttt{scipy.io.wavfile}, e os dois leram os mesmos parâmetros e as mesmas amostras. Nenhuma amostra satura (o maior valor absoluto é 0,95 do fundo de escala), a média é praticamente nula, e a correlação com o sinal extraído é maior que 0,9999. A interpolação linear erra menos que a cúbica (NRMSE 0,19 contra 0,21 nos estouros sintéticos), e a cúbica ultrapassa os picos em cerca de 10\%.
+
+\begin{table}[H]
+\centering
+\small
+\input{gerado/tab_audio.tex}
+\caption{Arquivos de áudio gerados. Pico e RMS são o nível do sinal antes da normalização, em \% da escala do gráfico.}
+\label{tab:audio}
+\end{table}
+
+\subsection{Análise comparativa dos três áudios}
+
+\paragraph{Forma de onda.}
+A Figura~\ref{fig:formas} mostra os três sinais na mesma escala, com \Sone, \Stwo{} e as janelas da análise, e a Tabela~\ref{tab:tempo} traz as medidas no tempo. O sinal Normal tem dois sons nítidos e uma sístole silenciosa: o RMS do sopro (0,98\%) é igual ao da diástole (1,07\%), a $-0{,}8$~dB. O sinal Still tem sons menores e, entre eles, um sopro de baixo nível, 9,8~dB acima da diástole e 7,5~dB abaixo de \Sone, e é o mais periódico dos três: a autocorrelação chega a 0,73, com repetição a cada 8,4~ms (119~Hz). No VSD, o sopro ocupa toda a sístole, 6,8~dB acima de \Sone{} e 3,8~dB acima de \Stwo, e é um ruído (autocorrelação de 0,17). Por isso o fator de crista é o menor dos três (5,0 contra 8,5 e 6,5): a energia é sustentada, e nenhum pico domina. Os intervalos entre \Sone{} e \Stwo{} são 254, 276 e 311~ms. Os níveis absolutos (pico e RMS) não são comparáveis entre os gráficos, porque a legenda diz ``Normalized'' e a normalização de origem não é conhecida. Valem as razões dentro de cada sinal.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/formas_de_onda.png}
+\caption{Os três sinais na mesma escala. Em amarelo, as janelas de \Sone{} e \Stwo; em cinza, o sopro sistólico.}
+\label{fig:formas}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\input{gerado/tab_tempo.tex}
+\caption{Níveis no tempo, por janela, em \% da escala do gráfico, e razões em decibéis.}
+\label{tab:tempo}
+\end{table}
+
+\paragraph{Espectro.}
+A Figura~\ref{fig:espectros} e a Tabela~\ref{tab:espectro} mostram o espectro do sopro sistólico. O Still concentra 95\% da energia entre 80 e 200~Hz, com um pico em 120~Hz e planura espectral de 0,047, o que é um tom estreito. O VSD espalha a energia: 46\% fica entre 200 e 500~Hz, o centroide sobe a 202~Hz e a planura é 4,2 vezes a do Still. No Normal, o espectro da janela sistólica é o do nível de fundo, e a frequência dominante de 144~Hz não tem significado. Na escala logarítmica, o Still fica uma ordem de grandeza ou mais acima do Normal, e o VSD fica de uma a duas ordens acima do Still. O espectrograma (Figura~\ref{fig:espectrogramas}, mesma escala de cor para os três) mostra dois estouros de banda larga e uma sístole escura no Normal, uma faixa estreita perto de 120~Hz na sístole do Still, e energia espalhada de 0 a 500~Hz em toda a sístole do VSD.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/espectros.png}
+\caption{Espectro do sopro sistólico, em escala linear e logarítmica. Em azul claro, a faixa de 90 a 170~Hz do tom de Still; em rosa, a de 80 a 500~Hz do VSD.}
+\label{fig:espectros}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\input{gerado/tab_espectro.tex}
+\caption{Métricas espectrais do sopro sistólico.}
+\label{tab:espectro}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figuras/espectrogramas.png}
+\caption{Espectrogramas dos três sinais (janela de 25~ms), na mesma escala de cor. As linhas tracejadas marcam \Sone{} e \Stwo.}
+\label{fig:espectrogramas}
+\end{figure}
+
+\paragraph{Conferência com o artigo.}
+A Tabela~\ref{tab:artigo} confronta as medidas com as afirmações do artigo. Sete das oito se reproduzem, entre elas o tom do Still em 120~Hz, que coincide com a média de 118,75~Hz do artigo. A que não se reproduz é a de que o maior pico do VSD passa de 200~Hz: aqui ele fica em 164~Hz, embora o centroide esteja em 202~Hz. O artigo trata de 20 gravações de cada tipo, e aqui há uma de cada, de modo que um pico em 164~Hz não contradiz a estatística do artigo.
+
+\begin{table}[H]
+\centering
+\small
+\input{gerado/tab_artigo.tex}
+\caption{Afirmações do artigo e valores medidos nos sinais reconstruídos. O critério de cada uma está em \texttt{src/analysis.py}.}
+\label{tab:artigo}
+\end{table}
+
+\paragraph{Resposta audível.}
+O autor ouviu os três arquivos (sem teste de audição controlado). A Tabela~\ref{tab:audicao} traz as impressões, nas palavras dele, e a relação com as medidas.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lXX}
+\toprule
+\textbf{Sinal} & \textbf{O que foi ouvido} & \textbf{Relação com as medidas} \\
+\midrule
+Normal & ``Duas batidas, tum-tum.'' & O sopro sistólico está no nível da diástole ($-0{,}8$~dB), e só as duas batidas se destacam. \\
+Still & ``Batidas mais rápidas, como se o coração não conseguisse concluir uma batida inteira e já partisse para a próxima.'' & O sopro está 9,8~dB acima da diástole, só 7,5~dB abaixo de \Sone, e é periódico (autocorrelação 0,73, repetição a cada 8,4~ms). Um sinal grave e regular desse nível, tocado sozinho por 0,5~s, tem uma pulsação audível, o que é compatível com batidas extras. \\
+VSD & ``Uma batida muito forte, mas que se parece mais com um sopro bem próximo do microfone.'' & O sopro é ruído, 6,8~dB acima de \Sone{} e 3,8~dB acima de \Stwo. As duas batidas ficam dentro dele, e o ouvido toma a sístole inteira por um único sopro forte. \\
+\bottomrule
+\end{tabularx}
+\caption{Impressões da audição e relação com as medidas.}
+\label{tab:audicao}
+\end{table}
+
+O Normal e o VSD soaram como as medidas previam. O Still soou diferente do que se esperava (um zumbido suave entre as duas batidas): o sopro de Still não é um ruído de fundo, e a audição o tomou por batidas a mais. É uma interpretação consistente com as medidas, e não uma comprovação.
