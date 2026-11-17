@@ -20,15 +20,23 @@ do milestone "Entrega PDI".
 ## Estrutura
 
 ```
+main.py              # pipeline completo (python main.py)
 src/correlation.py   # Req. 1: correlação 2D manual
-src/roi.py           # segmentação dos gráficos
-src/cleaning.py      # remoção de grade, eixos e texto
-src/curve.py         # extração da curva + calibração
-src/audio.py         # reamostragem + escrita do .wav
-src/config.py        # ROIs, limites de tempo
-main.py              # pipeline completo
+src/kernels.py       # máscaras: média, Gaussiano, Sobel
+src/filters.py       # suavização e gradiente sobre a correlação manual
+src/roi.py           # segmentação dos três gráficos
+src/cleaning.py      # remoção de grade, eixos, textos e anotações
+src/structure.py     # suavização, bordas, binarização e afinamento da curva
+src/curve.py         # extração da curva + calibração de tempo e amplitude
+src/audio.py         # reamostragem a 5 kHz e escrita do .wav
+src/pipeline.py      # encadeia tudo e grava as saídas
+src/config.py        # parâmetros (áudio, ROIs medidas, σ, limiares, ...)
+src/synthetic.py     # sinais sintéticos para validar a extração
 tests/               # testes (pytest)
-outputs/             # imagens intermediárias e .wav (gerados)
+demo_*.py            # demos de cada etapa
+explore_data.py      # exploração dos dados de entrada (Task 1B)
+docs/                # decisões e medições de cada etapa
+outputs/             # saídas geradas (não versionadas)
 report/              # relatório técnico
 Imagens/             # imagens de teste do Req. 1
 ```
@@ -40,8 +48,28 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-pytest            # testes
-python main.py    # pipeline (disponível após a Task 10)
+python main.py                  # roda tudo e grava em outputs/
+python main.py --saida pasta/   # outra pasta de saída
+pytest                          # testes
 ```
 
-`scipy` e `cv2.filter2D` são usados somente nos testes, como referência de validação.
+O pipeline grava:
+
+- `outputs/audio/normal.wav`, `still.wav`, `vsd.wav` (5000 Hz, 16 bits, mono, 0,5 s)
+- `outputs/etapas/*.png`: imagens de cada etapa, por painel (`a_01_original`, `a_02_sem_grade`,
+  `a_03_sinal_limpo`, `a_04_suavizado`, `a_05_bordas`, `a_06_binario`, `a_07_esqueleto`,
+  `a_08_extracao`, e o mesmo para `b` e `c`) e `rois_detectadas.png`
+- `outputs/resumo.json`: parâmetros e números principais
+
+Os parâmetros ajustáveis (σ do Gaussiano, limiares, regra de colapso, interpolação,
+normalização) ficam em `src/config.py`.
+
+## Requisito 1
+
+A filtragem espacial (média, Gaussiano e Sobel) usa só `correlate2d_manual`, escrita do zero
+no domínio do espaço com zero padding. O código do pipeline não chama
+`scipy.signal.correlate2d` nem `cv2.filter2D`, o que `tests/test_requisito1.py` verifica.
+Essas duas funções aparecem somente nos testes, como referência de validação.
+
+Outras bibliotecas usadas no pipeline: `skimage` para o limiar de Otsu e o afinamento
+(esqueleto), e `scipy.interpolate` para a opção de interpolação cúbica.
