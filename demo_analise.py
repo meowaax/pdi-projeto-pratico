@@ -89,10 +89,11 @@ def tabela(cabecalho, linhas):
                      ["| " + " | ".join(str(c) for c in l) + " |" for l in linhas]) + "\n"
 
 
-def tabelas(analises):
+def linhas_tempo(analises):
+    """Linhas (medida, valor do Normal, do Still, do VSD) dos níveis no tempo, já formatadas."""
     t = lambda n, k: analises[n].tempo[k]
     db = lambda v: f"{v:+.1f}"
-    linhas = [
+    return [
         ("Pico (%)", *[f"{t(n, 'pico_pct'):.1f}" for n in "abc"]),
         ("RMS total (%)", *[f"{t(n, 'rms_pct'):.1f}" for n in "abc"]),
         ("Fator de crista", *[f"{t(n, 'fator_de_crista'):.1f}" for n in "abc"]),
@@ -110,11 +111,13 @@ def tabelas(analises):
         ("Periodicidade do sopro (autocorrelação, 0 a 1)", *[f"{t(n, 'periodicidade_sopro'):.2f}" for n in "abc"]),
         ("Frequência da repetição do sopro (Hz)", *[f"{t(n, 'frequencia_periodica_sopro_hz'):.0f}" for n in "abc"]),
     ]
-    tab_tempo = tabela(["Medida", *[NOME[n] for n in "abc"]], linhas)
 
+
+def linhas_espectro(analises):
+    """Linhas (medida, valor do Normal, do Still, do VSD) das métricas espectrais do sopro, já formatadas."""
     e = lambda n, k: analises[n].espectro["sopro"][k]
     faixas = list(analises["a"].espectro["sopro"]["energia_faixas"])
-    linhas = [
+    return [
         ("Frequência dominante (Hz)", *[f"{e(n, 'frequencia_dominante_hz'):.0f}" for n in "abc"]),
         ("Centroide (Hz)", *[f"{e(n, 'centroide_hz'):.0f}" for n in "abc"]),
         ("Largura a meia potência (Hz)", *[f"{e(n, 'largura_meia_potencia_hz'):.0f}" for n in "abc"]),
@@ -123,8 +126,12 @@ def tabelas(analises):
         ("Frequência dominante de S1 (Hz)", *[f"{analises[n].espectro['s1']['frequencia_dominante_hz']:.0f}" for n in "abc"]),
         ("Frequência dominante de S2 (Hz)", *[f"{analises[n].espectro['s2']['frequencia_dominante_hz']:.0f}" for n in "abc"]),
     ]
-    tab_esp = tabela(["Medida (janela do sopro sistólico)", *[NOME[n] for n in "abc"]], linhas)
 
+
+def tabelas(analises):
+    """As três tabelas em Markdown: níveis no tempo, espectro do sopro e conferência com o artigo."""
+    tab_tempo = tabela(["Medida", *[NOME[n] for n in "abc"]], linhas_tempo(analises))
+    tab_esp = tabela(["Medida (janela do sopro sistólico)", *[NOME[n] for n in "abc"]], linhas_espectro(analises))
     tab_art = tabela(["Painel", "Afirmação do artigo", "Critério", "Medido", "Atendido"],
                      [(it["painel"], it["afirmacao"], it["criterio"], it["medido"], "sim" if it["atendido"] else "**não**")
                       for it in analysis.conferir_artigo(analises)])

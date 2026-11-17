@@ -100,7 +100,7 @@ def _como_tinta(valores):
     return np.rint(255.0 * (1.0 - np.clip(valores, 0.0, 1.0))).astype(np.uint8)
 
 
-def _figura_extracao(r, caminho):
+def figura_extracao(r, caminho):
     """Curva extraída sobre o recorte original e o sinal calibrado em função do tempo."""
     import matplotlib
     matplotlib.use("Agg")
@@ -147,7 +147,7 @@ def salvar_etapas(rgb, resultados, pasta):
         gravar(f"{n}_06_binario.png", _como_tinta(e.mascara))
         gravar(f"{n}_07_esqueleto.png", _como_tinta(e.esqueleto))
         nome = f"{n}_08_extracao.png"
-        gravados[nome] = _figura_extracao(r, pasta / nome)
+        gravados[nome] = figura_extracao(r, pasta / nome)
     return gravados
 
 
