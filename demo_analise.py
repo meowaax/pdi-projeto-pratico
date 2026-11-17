@@ -107,6 +107,8 @@ def tabelas(analises):
         ("Sopro sobre diástole (dB)", *[db(t(n, "sopro_sobre_diastole_db")) for n in "abc"]),
         ("Sopro sobre S1 (dB)", *[db(t(n, "sopro_sobre_s1_db")) for n in "abc"]),
         ("Taxa de cruzamentos por zero no sopro (Hz equivalentes)", *[f"{t(n, 'cruzamentos_por_zero_sopro_hz'):.0f}" for n in "abc"]),
+        ("Periodicidade do sopro (autocorrelação, 0 a 1)", *[f"{t(n, 'periodicidade_sopro'):.2f}" for n in "abc"]),
+        ("Frequência da repetição do sopro (Hz)", *[f"{t(n, 'frequencia_periodica_sopro_hz'):.0f}" for n in "abc"]),
     ]
     tab_tempo = tabela(["Medida", *[NOME[n] for n in "abc"]], linhas)
 
