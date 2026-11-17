@@ -171,3 +171,106 @@ def test_real_niveis_batem_com_o_demo_de_audio(reais):
     assert reais["b"][2]["rms_pct"] == pytest.approx(8.51, abs=0.05)
     assert reais["c"][2]["rms_pct"] == pytest.approx(17.64, abs=0.05)
     assert reais["a"][2]["pico_pct"] == pytest.approx(92.7, abs=0.2)
+
+
+# ----------------------------------------------------------------------------
+# Espectro
+# ----------------------------------------------------------------------------
+def tom(freq, amp=1.0, n=900, fs=5000):
+    return amp * np.sin(2 * np.pi * freq * np.arange(n) / fs)
+
+
+def test_psd_preserva_a_potencia_media():
+    x = np.random.default_rng(0).normal(0, 3, 4000)
+    f, p = analysis.psd(x, nfft=8192)
+    df = f[1] - f[0]
+    assert np.sum(p) * df == pytest.approx(np.var(x), rel=0.1)         # Parseval: potência total ≈ variância
+
+
+@pytest.mark.parametrize("freq", [60.0, 120.0, 250.0, 480.0])
+def test_tom_puro_tem_o_pico_na_frequencia_certa(freq):
+    f, p = analysis.psd(tom(freq))
+    m = analysis.metricas_espectro(f, p)
+    assert m["frequencia_dominante_hz"] == pytest.approx(freq, abs=1.5)
+    assert m["centroide_hz"] == pytest.approx(freq, abs=5)
+    assert m["planura"] < 0.01
+
+
+def test_largura_a_meia_potencia_do_tom_e_a_do_lobo_da_janela_de_hann():
+    n = 900
+    f, p = analysis.psd(tom(120.0, n=n))
+    largura = analysis.metricas_espectro(f, p)["largura_meia_potencia_hz"]
+    assert largura == pytest.approx(1.44 * 5000 / n, rel=0.15)         # -3 dB da janela de Hann (potência)
+
+
+def test_energia_por_faixa_de_dois_tons():
+    x = tom(60.0, 1.0) + tom(300.0, 1.0)                                 # mesma amplitude: metade da energia em cada
+    f, p = analysis.psd(x)
+    e = analysis.metricas_espectro(f, p)["energia_faixas"]
+    assert e["40-80"] == pytest.approx(0.5, abs=0.03) and e["200-500"] == pytest.approx(0.5, abs=0.03)
+    assert e["80-200"] < 0.02 and e["500-660"] < 0.02
+    assert sum(e.values()) == pytest.approx(1.0, abs=1e-9)
+
+
+def test_planura_separa_tom_de_ruido_branco():
+    ruido = np.random.default_rng(1).normal(size=2000)
+    plano = analysis.metricas_espectro(*analysis.psd(ruido))["planura"]
+    assert 0.4 < plano < 0.7                                              # periodograma de ruído branco: ~0,56
+    assert analysis.metricas_espectro(*analysis.psd(tom(150.0)))["planura"] < 0.05
+
+
+def test_espectro_sem_energia_na_banda_levanta_erro():
+    f, p = analysis.psd(tom(1200.0))                                       # só energia acima da banda
+    with pytest.raises(ValueError):
+        analysis.metricas_espectro(f, np.where(f > 700, p, 0.0))
+
+
+def test_psd_rejeita_trecho_curto():
+    with pytest.raises(ValueError):
+        analysis.psd(np.ones(4))
+
+
+def test_espectrograma_acompanha_a_mudanca_de_frequencia():
+    y = np.concatenate([tom(100.0, n=1250), tom(300.0, n=1250)])          # 0,25 s em 100 Hz e 0,25 s em 300 Hz
+    t, f, P = analysis.espectrograma(y)
+    assert P.shape == (len(f), len(t)) and f.max() <= 700 and np.all(P >= 0)
+    primeira, segunda = P[:, t < 0.2], P[:, t > 0.3]
+    assert f[np.argmax(primeira.mean(axis=1))] == pytest.approx(100, abs=6)
+    assert f[np.argmax(segunda.mean(axis=1))] == pytest.approx(300, abs=6)
+    assert t[0] == pytest.approx(0.0125) and np.diff(t) == pytest.approx(0.002)
+
+
+def test_espectrograma_rejeita_sinal_curto():
+    with pytest.raises(ValueError):
+        analysis.espectrograma(np.ones(50))
+
+
+# ----------------------------------------------------------------------------
+# Espectro dos sinais reais
+# ----------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def espectros(reais):
+    saida = {}
+    for nome, (s, ev, _) in reais.items():
+        jan = analysis.janelas(s, ev)
+        saida[nome] = analysis.metricas_espectro(*analysis.espectro_da_janela(s, jan["sopro"]))
+    return saida
+
+
+def test_real_still_tem_tom_em_torno_de_120_hz(espectros):
+    # O artigo mede 118,75 Hz em média (90 a 170 Hz) para o sopro de Still.
+    assert 90 <= espectros["b"]["frequencia_dominante_hz"] <= 170
+    assert espectros["b"]["frequencia_dominante_hz"] == pytest.approx(120, abs=15)
+    assert espectros["b"]["energia_faixas"]["80-200"] > 0.8
+
+
+def test_real_vsd_e_mais_largo_e_mais_agudo_que_still(espectros):
+    vsd, still = espectros["c"], espectros["b"]
+    assert vsd["planura"] > 2 * still["planura"]
+    assert vsd["centroide_hz"] > still["centroide_hz"] + 40
+    assert vsd["energia_faixas"]["200-500"] > 0.3 > still["energia_faixas"]["200-500"]
+
+
+def test_real_energias_por_faixa_somam_um(espectros):
+    for m in espectros.values():
+        assert sum(m["energia_faixas"].values()) == pytest.approx(1.0)

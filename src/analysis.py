@@ -156,3 +156,92 @@ def metricas_tempo(sinal, eventos):
         "sopro_sobre_s1_db": razao_db(nivel["sopro"], nivel["s1"]),
         "cruzamentos_por_zero_sopro_hz": float(cruzamentos / (2.0 * len(sop) / FS)) if len(sop) else 0.0,
     }
+
+
+# ----------------------------------------------------------------------------
+# Espectro
+# ----------------------------------------------------------------------------
+# A figura só entrega conteúdo abaixo de ~667 Hz (1333 colunas por segundo) e abaixo de ~40 Hz há
+# energia de nível DC residual e de oscilações lentas, então o espectro é medido de 40 a 660 Hz.
+BANDA_HZ = (40.0, 660.0)
+FAIXAS_HZ = ((40.0, 80.0), (80.0, 200.0), (200.0, 500.0), (500.0, 660.0))    # as do artigo: <80 ruído, <200 Still, 80-500 VSD
+NFFT = 8192                  # zero padding: o espectro fica liso, a resolução real é 1 / duração da janela
+PLANURA_HZ = (80.0, 500.0)   # faixa em que se mede a planura espectral
+
+
+def psd(x, fs=FS, nfft=NFFT):
+    """Densidade espectral de potência (periodograma com janela de Hann), sem a média do trecho.
+
+    Retorna (frequências em Hz, potência). Espectro unilateral, normalizado de modo que a soma de P * df
+    é a potência média de x (a variância, pois a média é retirada).
+    """
+    x = np.asarray(x, dtype=np.float64)
+    if x.size < 8:
+        raise ValueError("trecho curto demais para calcular o espectro")
+    w = np.hanning(x.size)
+    X = np.fft.rfft((x - x.mean()) * w, nfft)
+    p = (np.abs(X) ** 2) / (fs * np.sum(w * w))
+    p[1:-1] *= 2.0                      # espectro unilateral: a energia das frequências negativas vem para cá
+    return np.fft.rfftfreq(nfft, 1.0 / fs), p
+
+
+def _contido(f, a, b):
+    return (f >= a) & (f < b)
+
+
+def metricas_espectro(f, p, banda=BANDA_HZ, faixas=FAIXAS_HZ):
+    """Resumo de um espectro dentro de `banda`.
+
+    frequencia_dominante_hz : posição do maior pico.
+    centroide_hz            : média das frequências ponderada pela potência.
+    largura_meia_potencia_hz: largura do pico dominante, onde a potência cai à metade.
+    energia_faixas          : fração da energia em cada faixa de `faixas` (somam 1 se as faixas cobrem a banda).
+    planura                 : média geométrica / média aritmética da potência de 80 a 500 Hz. Perto de 0 é tom
+                              puro; em ruído branco, ~0,56 (efeito do periodograma de uma só realização).
+    """
+    em_banda = (f >= banda[0]) & (f <= banda[1])
+    fb, pb = f[em_banda], p[em_banda]
+    if not pb.any():
+        raise ValueError("espectro sem energia na banda de análise")
+    i = int(np.argmax(pb))
+    metade = pb[i] / 2.0
+    esq, dir_ = i, i
+    while esq > 0 and pb[esq - 1] >= metade:
+        esq -= 1
+    while dir_ < len(pb) - 1 and pb[dir_ + 1] >= metade:
+        dir_ += 1
+    total = pb.sum()
+    plano = p[_contido(f, *PLANURA_HZ)]
+    return {
+        "frequencia_dominante_hz": float(fb[i]),
+        "centroide_hz": float(np.sum(fb * pb) / total),
+        "largura_meia_potencia_hz": float(fb[dir_] - fb[esq]),
+        "energia_faixas": {f"{int(a)}-{int(b)}": float(p[_contido(f, a, b)].sum() / total) for a, b in faixas},
+        "planura": float(np.exp(np.mean(np.log(plano + 1e-30))) / np.mean(plano)),
+    }
+
+
+def espectro_da_janela(sinal, mascara):
+    """(f, p) do trecho do sinal selecionado pela máscara booleana."""
+    return psd(sinal.y[mascara], sinal.fs)
+
+
+def espectrograma(y, fs=FS, janela_ms=25.0, passo_ms=2.0, nfft=1024, fmax=700.0):
+    """Espectrograma de potência (STFT com janela de Hann).
+
+    Retorna (instantes dos centros das janelas em s a partir do início de y, frequências em Hz até `fmax`,
+    matriz de potência com uma linha por frequência e uma coluna por instante).
+    """
+    y = np.asarray(y, dtype=np.float64)
+    n, passo = int(round(fs * janela_ms / 1000.0)), max(1, int(round(fs * passo_ms / 1000.0)))
+    if y.size < n:
+        raise ValueError("sinal mais curto que a janela do espectrograma")
+    w = np.hanning(n)
+    inicios = np.arange(0, y.size - n + 1, passo)
+    quadros = np.stack([y[i:i + n] * w for i in inicios])
+    quadros -= quadros.mean(axis=1, keepdims=True) * w / w.mean()      # tira a média de cada quadro
+    P = (np.abs(np.fft.rfft(quadros, nfft, axis=1)) ** 2 / (fs * np.sum(w * w))).T
+    P[1:-1] *= 2.0
+    f = np.fft.rfftfreq(nfft, 1.0 / fs)
+    manter = f <= fmax
+    return (inicios + n / 2.0) / fs, f[manter], P[manter]
