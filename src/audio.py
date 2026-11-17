@@ -150,3 +150,25 @@ def ler_wav(caminho):
     if canais > 1:
         amostras = amostras.reshape(-1, canais)
     return InfoWav(taxa=taxa, canais=canais, bits=8 * largura, amostras=amostras)
+
+
+def exportar_wavs(sinais, pasta, metodo="linear", normalizacao="pico", alvo=ALVO_PADRAO):
+    """Grava um .wav por painel, com os nomes de `config.ARQUIVOS_WAV` (normal, still e vsd).
+
+    sinais : dict {'a': sinal, 'b': sinal, 'c': sinal}. Cada sinal precisa de `t`, `amplitude` e
+             `calibracao.t_ini` (como o `curve.SinalExtraido`).
+    Retorna um dict {nome: {'caminho', 'pico_pct', 'rms_pct'}} com o nível do sinal ANTES da
+    normalização, em % da escala do gráfico, para comparar o volume relativo entre os painéis.
+    """
+    pasta = Path(pasta)
+    saida = {}
+    for nome, sinal in sinais.items():
+        if nome not in config.ARQUIVOS_WAV:
+            raise ValueError(f"painel desconhecido: {nome!r}")
+        pcm = sinal_para_pcm(sinal.t, sinal.amplitude, sinal.calibracao.t_ini, metodo, normalizacao, alvo)
+        caminho = gravar_wav(pasta / config.ARQUIVOS_WAV[nome], pcm)
+        _, y = reamostrar(sinal.t, sinal.amplitude, sinal.calibracao.t_ini, metodo=metodo)
+        y = remover_dc(y) * 100.0
+        saida[nome] = {"caminho": caminho, "pico_pct": float(np.abs(y).max()),
+                       "rms_pct": float(np.sqrt(np.mean(y ** 2)))}
+    return saida

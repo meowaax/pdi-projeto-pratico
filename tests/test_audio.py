@@ -195,3 +195,87 @@ def test_ler_wav_rejeita_8_bits(tmp_path):
         arq.writeframes(bytes(10))
     with pytest.raises(ValueError):
         audio.ler_wav(caminho)
+
+
+# ----------------------------------------------------------------------------
+# Exportação a partir da Figure1.png real
+# ----------------------------------------------------------------------------
+import cv2
+from types import SimpleNamespace
+
+from src import cleaning, curve, roi, structure
+
+
+@pytest.fixture(scope="module")
+def sinais_reais():
+    rgb = cv2.imread(str(config.FIGURA), cv2.IMREAD_COLOR)[:, :, ::-1].copy()
+    saida = {}
+    for p in roi.segmentar_paineis(rgb, usar_fallback=False):
+        est = structure.realcar_curva(cleaning.limpar_recorte(roi.recortar(rgb, p)).cobertura)
+        saida[p.nome] = curve.extrair_sinal(est.mascara, curve.Calibracao.de_painel(p))
+    return saida
+
+
+@pytest.fixture(scope="module")
+def wavs(sinais_reais, tmp_path_factory):
+    pasta = tmp_path_factory.mktemp("audio")
+    return pasta, audio.exportar_wavs(sinais_reais, pasta)
+
+
+def test_gera_os_tres_arquivos_com_os_nomes_pedidos(wavs):
+    pasta, info = wavs
+    assert sorted(p.name for p in pasta.iterdir()) == ["normal.wav", "still.wav", "vsd.wav"]
+    assert {n: i["caminho"].name for n, i in info.items()} == {"a": "normal.wav", "b": "still.wav", "c": "vsd.wav"}
+
+
+@pytest.mark.parametrize("arquivo", ["normal.wav", "still.wav", "vsd.wav"])
+def test_wav_real_tem_o_formato_exigido(wavs, arquivo):
+    pasta, _ = wavs
+    w = audio.ler_wav(pasta / arquivo)
+    assert (w.taxa, w.bits, w.canais) == (5000, 16, 1)
+    assert w.n_amostras == 2500 and w.duracao == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("arquivo", ["normal.wav", "still.wav", "vsd.wav"])
+def test_wav_real_sem_clipping_e_sem_dc(wavs, arquivo):
+    pasta, _ = wavs
+    x = audio.ler_wav(pasta / arquivo).amostras.astype(float)
+    assert np.abs(x).max() < 32767                                  # nenhuma amostra saturada
+    assert np.abs(x).max() == pytest.approx(audio.ALVO_PADRAO * 32767, abs=1)
+    assert abs(x.mean()) < 0.01 * np.abs(x).max()                   # DC removido
+
+
+def test_wav_real_segue_o_sinal_extraido(wavs, sinais_reais):
+    pasta, _ = wavs
+    for nome, arquivo in config.ARQUIVOS_WAV.items():
+        s = sinais_reais[nome]
+        x = audio.ler_wav(pasta / arquivo).amostras.astype(float)
+        _, y = audio.reamostrar(s.t, s.amplitude, s.calibracao.t_ini)
+        assert np.corrcoef(x, y)[0, 1] > 0.9999
+
+
+def test_niveis_relativos_sao_informados(wavs):
+    _, info = wavs
+    assert info["c"]["rms_pct"] > info["a"]["rms_pct"]              # VSD (denso) é mais forte que o normal
+    assert info["a"]["pico_pct"] > info["b"]["pico_pct"]
+    for i in info.values():
+        assert 0 < i["rms_pct"] < i["pico_pct"] <= 100
+
+
+def test_normalizacao_escala_preserva_o_volume_relativo(sinais_reais, tmp_path):
+    info = audio.exportar_wavs(sinais_reais, tmp_path, normalizacao="escala")
+    rms = {n: np.sqrt(np.mean(audio.ler_wav(i["caminho"]).amostras.astype(float) ** 2)) for n, i in info.items()}
+    for n in "abc":
+        assert rms[n] / rms["a"] == pytest.approx(info[n]["rms_pct"] / info["a"]["rms_pct"], rel=0.01)
+
+
+def test_exportar_rejeita_painel_desconhecido(tmp_path):
+    falso = SimpleNamespace(t=np.array([0.0, 0.5]), amplitude=np.array([0.0, 0.0]), calibracao=SimpleNamespace(t_ini=0.0))
+    with pytest.raises(ValueError):
+        audio.exportar_wavs({"z": falso}, tmp_path)
+
+
+def test_exportar_sinal_silencioso_gera_arquivo_valido(tmp_path):
+    mudo = SimpleNamespace(t=np.linspace(0.001, 0.499, 100), amplitude=np.zeros(100), calibracao=SimpleNamespace(t_ini=0.0))
+    info = audio.exportar_wavs({"a": mudo}, tmp_path)
+    assert not audio.ler_wav(info["a"]["caminho"]).amostras.any()
