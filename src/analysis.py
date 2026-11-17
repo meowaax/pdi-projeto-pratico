@@ -245,3 +245,73 @@ def espectrograma(y, fs=FS, janela_ms=25.0, passo_ms=2.0, nfft=1024, fmax=700.0)
     f = np.fft.rfftfreq(nfft, 1.0 / fs)
     manter = f <= fmax
     return (inicios + n / 2.0) / fs, f[manter], P[manter]
+
+
+# ----------------------------------------------------------------------------
+# Análise completa e confronto com o artigo
+# ----------------------------------------------------------------------------
+@dataclass(frozen=True)
+class AnalisePainel:
+    """Tudo o que a análise mede em um painel."""
+    sinal: SinalAnalise
+    eventos: Eventos
+    janelas: dict
+    tempo: dict          # metricas_tempo
+    espectro: dict       # {'sopro': metricas_espectro, 's1': ..., 's2': ...}
+    psd_sopro: tuple     # (f, p) do sopro sistólico
+
+    @property
+    def nome(self):
+        return self.sinal.nome
+
+
+def analisar_painel(resultado):
+    """Analisa um `pipeline.ResultadoPainel`."""
+    sinal = preparar_sinal(resultado)
+    t1, t2 = tempos_dos_rotulos(resultado.limpo.anotacoes, resultado.sinal.calibracao)
+    eventos = localizar_eventos(sinal, t1, t2)
+    jan = janelas(sinal, eventos)
+    espectros = {nome: espectro_da_janela(sinal, jan[nome]) for nome in ("sopro", "s1", "s2")}
+    return AnalisePainel(sinal=sinal, eventos=eventos, janelas=jan, tempo=metricas_tempo(sinal, eventos),
+                         espectro={n: metricas_espectro(*fp) for n, fp in espectros.items()},
+                         psd_sopro=espectros["sopro"])
+
+
+def analisar(resultados):
+    """Analisa todos os painéis. Devolve {'a': AnalisePainel, ...}."""
+    return {r.nome: analisar_painel(r) for r in resultados}
+
+
+def conferir_artigo(analises):
+    """Confronta as medidas com as afirmações de Tomas et al. (2011) sobre cada tipo de sopro.
+
+    Cada item traz: painel, afirmação do artigo, critério numérico usado, valor medido e se foi atendido.
+    As afirmações valem para 20 gravações de cada tipo. Aqui há uma gravação de cada, e a figura limita o
+    conteúdo a ~667 Hz, então um critério não atendido não contradiz o artigo.
+    """
+    a, b, c = (analises[n] for n in "abc")
+    sop = lambda an: an.espectro["sopro"]
+    fx = lambda an, ini, fim: sum(v for k, v in sop(an)["energia_faixas"].items() if ini <= float(k.split("-")[0]) and float(k.split("-")[1]) <= fim)
+    itens = []
+
+    def item(painel, afirmacao, criterio, medido, atendido, unidade=""):
+        itens.append({"painel": painel, "afirmacao": afirmacao, "criterio": criterio,
+                      "medido": f"{medido:.3g}{unidade}", "atendido": bool(atendido)})
+
+    f_still = sop(b)["frequencia_dominante_hz"]
+    item("b", "Still tem ressonância entre 90 e 170 Hz", "frequência dominante do sopro em 90 a 170 Hz", f_still, 90 <= f_still <= 170, " Hz")
+    item("b", "A frequência do tom de Still fica na maioria dos casos entre 110 e 130 Hz (média de 118,75 Hz)",
+         "frequência dominante do sopro em 110 a 130 Hz", f_still, 110 <= f_still <= 130, " Hz")
+    item("b", "A energia de Still fica abaixo de 200 Hz, em banda estreita", "pelo menos 80% da energia do sopro abaixo de 200 Hz",
+         fx(b, 40, 200), fx(b, 40, 200) >= 0.8)
+    item("a", "A energia do Normal fica abaixo de 200 Hz", "pelo menos 80% da energia da janela sistólica abaixo de 200 Hz",
+         fx(a, 40, 200), fx(a, 40, 200) >= 0.8)
+    item("a", "O Normal não tem sopro (sem ressonância)", "sopro menos de 3 dB acima do nível da diástole",
+         a.tempo["sopro_sobre_diastole_db"], a.tempo["sopro_sobre_diastole_db"] < 3, " dB")
+    item("c", "A energia do VSD se distribui em banda larga de 80 a 500 Hz", "pelo menos 80% da energia do sopro de 80 a 500 Hz",
+         fx(c, 80, 500), fx(c, 80, 500) >= 0.8)
+    item("c", "O VSD é mais disperso em frequência que o Still", "planura espectral do VSD maior que a do Still",
+         sop(c)["planura"] / sop(b)["planura"], sop(c)["planura"] > sop(b)["planura"], "x")
+    item("c", "A frequência do maior pico do VSD passa de 200 Hz", "frequência dominante do sopro acima de 200 Hz",
+         sop(c)["frequencia_dominante_hz"], sop(c)["frequencia_dominante_hz"] > 200, " Hz")
+    return itens

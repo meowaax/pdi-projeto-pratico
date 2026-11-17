@@ -274,3 +274,51 @@ def test_real_vsd_e_mais_largo_e_mais_agudo_que_still(espectros):
 def test_real_energias_por_faixa_somam_um(espectros):
     for m in espectros.values():
         assert sum(m["energia_faixas"].values()) == pytest.approx(1.0)
+
+
+# ----------------------------------------------------------------------------
+# Análise completa e confronto com o artigo
+# ----------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def analises():
+    return analysis.analisar(pipeline.processar_figura(pipeline.carregar_figura()))
+
+
+def test_analisar_devolve_os_tres_paineis(analises):
+    assert list(analises) == ["a", "b", "c"]
+    for n, an in analises.items():
+        assert an.nome == n
+        assert set(an.espectro) == {"sopro", "s1", "s2"}
+        f, p = an.psd_sopro
+        assert f.shape == p.shape and f[0] == 0
+
+
+def test_analisar_concorda_com_as_etapas_separadas(analises, reais):
+    for n in "abc":
+        assert analises[n].tempo == reais[n][2]
+        assert analises[n].eventos == reais[n][1]
+
+
+def test_conferir_artigo_tem_itens_bem_formados(analises):
+    itens = analysis.conferir_artigo(analises)
+    assert len(itens) == 8
+    for it in itens:
+        assert set(it) == {"painel", "afirmacao", "criterio", "medido", "atendido"}
+        assert it["painel"] in "abc" and isinstance(it["atendido"], bool)
+
+
+def test_conferir_artigo_resultado_real(analises):
+    # 7 de 8 afirmações do artigo são reproduzidas. A que falha: a frequência do maior pico do VSD fica abaixo de 200 Hz.
+    por_criterio = {it["criterio"]: it for it in analysis.conferir_artigo(analises)}
+    falhas = [c for c, it in por_criterio.items() if not it["atendido"]]
+    assert falhas == ["frequência dominante do sopro acima de 200 Hz"]
+    assert por_criterio["frequência dominante do sopro em 110 a 130 Hz"]["atendido"]
+
+
+def test_conferir_artigo_detecta_quando_o_criterio_falha(analises):
+    from dataclasses import replace
+    espectro = {**analises["b"].espectro, "sopro": {**analises["b"].espectro["sopro"], "frequencia_dominante_hz": 260.0}}
+    trocado = {**analises, "b": replace(analises["b"], espectro=espectro)}
+    itens = {it["criterio"]: it for it in analysis.conferir_artigo(trocado)}
+    assert not itens["frequência dominante do sopro em 90 a 170 Hz"]["atendido"]
+    assert not itens["frequência dominante do sopro em 110 a 130 Hz"]["atendido"]
