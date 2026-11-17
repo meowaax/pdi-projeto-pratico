@@ -64,6 +64,20 @@ O pipeline grava:
 Os parâmetros ajustáveis (σ do Gaussiano, limiares, regra de colapso, interpolação,
 normalização) ficam em `src/config.py`.
 
+## Relatório
+
+O relatório técnico está em `report/relatorio.pdf`, escrito em LaTeX (`report/relatorio.tex` e
+`report/secoes/`). As figuras (`report/figuras/`) e as tabelas (`report/gerado/`) saem do próprio
+código, para os números do texto não ficarem desatualizados:
+
+```bash
+python report/gerar_figuras.py   # regenera figuras e tabelas
+report/compilar.sh               # compila o PDF (pdflatex, duas passadas)
+```
+
+`tests/test_report.py` confere que as tabelas versionadas são as geradas pelo código e que o
+relatório compila sem referências indefinidas.
+
 ## Requisito 1
 
 A filtragem espacial (média, Gaussiano e Sobel) usa só `correlate2d_manual`, escrita do zero

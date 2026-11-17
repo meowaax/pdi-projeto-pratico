@@ -101,6 +101,41 @@ def test_relatorio_tem_as_secoes_exigidas_pela_especificacao():
         assert f"\\section{{{secao}}}" in texto, secao
 
 
+def test_relatorio_nao_tem_pendencias():
+    texto = texto_do_relatorio()
+    for frase in ("seção em redação", "a preencher"):
+        assert frase not in texto.lower(), frase
+    assert not re.search(r"\b(TODO|FIXME|XXX)\b", texto)          # ``todo'' em minúsculas é uma palavra comum do texto
+
+
+def test_todas_as_figuras_geradas_sao_usadas_no_relatorio():
+    texto = texto_do_relatorio()
+    for nome in FIGURAS_ESPERADAS:
+        assert f"figuras/{nome}" in texto, nome
+
+
+def test_todas_as_tabelas_geradas_sao_usadas_no_relatorio():
+    texto = texto_do_relatorio()
+    for nome in TABELAS_ESPERADAS:
+        assert f"gerado/{nome}" in texto, nome
+
+
+def test_capa_tem_o_aluno_e_a_disciplina():
+    capa = (RAIZ / "report" / "secoes" / "00_capa.tex").read_text(encoding="utf-8")
+    for trecho in ("Alex Tavares Cordeiro", "Introdução ao Processamento Digital de Imagens", "2026.2", "Universidade Federal da Paraíba"):
+        assert trecho in capa, trecho
+
+
+def test_numeros_do_texto_batem_com_as_tabelas_geradas():
+    """Valores citados no texto vêm das tabelas; se o código mudar e o texto não, este teste acusa."""
+    texto = texto_do_relatorio()
+    gerado = {n: (RAIZ / "report" / "gerado" / n).read_text(encoding="utf-8") for n in TABELAS_ESPERADAS}
+    assert "120" in gerado["tab_espectro.tex"] and "tom do Still em 120" in texto
+    assert "0,73" in texto and "0{,}73" in gerado["tab_tempo.tex"]          # periodicidade do Still
+    assert "5044 bytes" in texto
+    assert "\\textbf{não}" in gerado["tab_artigo.tex"] and gerado["tab_artigo.tex"].count("sim \\\\") == 7
+
+
 def test_figuras_e_tabelas_citadas_existem():
     texto = texto_do_relatorio()
     for caminho in re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", texto):
