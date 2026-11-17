@@ -24,9 +24,11 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from src import config
+
 log = logging.getLogger(__name__)
 
-LIMIAR_AZUL = 12        # azulado máximo do ruído de compressão (medido: 9) com folga
+LIMIAR_AZUL = config.LIMIAR_AZUL   # azulado máximo do ruído de compressão (medido: 9) com folga
 PERCENTIL_REFERENCIA = 99.0
 
 

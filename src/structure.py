@@ -20,10 +20,11 @@ import numpy as np
 from skimage.filters import threshold_otsu
 from skimage.morphology import skeletonize
 
+from src import config
 from src.filters import bordas_sobel, suavizar_gaussiano
 
-SIGMA_PADRAO = 1.0      # kernel 7x7 (±3σ)
-LIMIAR_PADRAO = "otsu"  # limiar de Otsu sobre a cobertura suavizada (ou um número em (0, 1))
+SIGMA_PADRAO = config.SIGMA_GAUSSIANO        # kernel 7x7 (±3σ) com σ = 1,0
+LIMIAR_PADRAO = config.LIMIAR_BINARIZACAO    # "otsu" ou um número em (0, 1)
 
 
 @dataclass(frozen=True)

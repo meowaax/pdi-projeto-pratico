@@ -19,6 +19,15 @@ N_AMOSTRAS = int(FS_AUDIO * DURACAO_S)  # 2500
 # Nomes dos arquivos de saída
 ARQUIVOS_WAV = {"a": "normal.wav", "b": "still.wav", "c": "vsd.wav"}
 
+# Parâmetros ajustáveis do pipeline (padrões justificados em docs/)
+LIMIAR_AZUL = 12                # azulado mínimo de um pixel de curva; o ruído de compressão chega a 9 (Task 5)
+SIGMA_GAUSSIANO = 1.0           # σ do Gaussiano, em pixels (Task 7, docs/filtragem_sigma.md)
+LIMIAR_BINARIZACAO = "otsu"     # 'otsu' ou um número em (0, 1)
+REGRA_COLAPSO = "picos"         # 'picos' ou 'centro' (Task 8, docs/extracao_sinal.md)
+METODO_INTERPOLACAO = "linear"  # 'linear' ou 'cubica' (Task 9, docs/audio.md)
+NORMALIZACAO = "pico"           # 'pico' ou 'escala' (Task 9)
+ALVO_NORMALIZACAO = 0.95        # fração do fundo de escala
+
 # Valores de amplitude (%) rotulados no eixo vertical, de cima para baixo
 AMPLITUDES_PCT = (75, 50, 25, 0, -25, -50, -75)
 
