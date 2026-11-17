@@ -71,3 +71,91 @@ def test_sem_fallback_a_imagem_sem_paineis_levanta_erro():
 def test_resultados_sao_imutaveis(resultados):
     with pytest.raises(Exception):
         resultados[0].sinal = None
+
+
+# ----------------------------------------------------------------------------
+# Execução completa e arquivos gerados
+# ----------------------------------------------------------------------------
+import json
+
+import cv2
+
+from src import audio
+
+
+@pytest.fixture(scope="module")
+def execucao(tmp_path_factory):
+    return pipeline.executar(saida=tmp_path_factory.mktemp("saida"))
+
+
+def test_gera_os_tres_wav_com_os_nomes_pedidos(execucao):
+    nomes = sorted(p.name for p in (execucao.pasta / "audio").iterdir())
+    assert nomes == ["normal.wav", "still.wav", "vsd.wav"]
+    for nome in nomes:
+        w = audio.ler_wav(execucao.pasta / "audio" / nome)
+        assert (w.taxa, w.bits, w.canais, w.n_amostras) == (5000, 16, 1, 2500)
+
+
+def test_gera_as_imagens_de_cada_etapa(execucao):
+    esperadas = {"rois_detectadas.png"} | {
+        f"{n}_{e}.png" for n in "abc" for e in
+        ("01_original", "02_sem_grade", "03_sinal_limpo", "04_suavizado", "05_bordas", "06_binario", "07_esqueleto", "08_extracao")}
+    assert set(execucao.imagens) == esperadas
+    assert {p.name for p in (execucao.pasta / "etapas").iterdir()} == esperadas
+    for caminho in execucao.imagens.values():
+        assert cv2.imread(str(caminho), cv2.IMREAD_UNCHANGED) is not None
+
+
+def test_imagens_de_cada_painel_tem_o_tamanho_do_recorte(execucao):
+    for r in execucao.resultados:
+        h, w = r.recorte.shape[:2]
+        for etapa in ("02_sem_grade", "03_sinal_limpo", "04_suavizado", "05_bordas", "06_binario", "07_esqueleto"):
+            img = cv2.imread(str(execucao.imagens[f"{r.nome}_{etapa}.png"]), cv2.IMREAD_UNCHANGED)
+            assert img.shape == (h, w), (r.nome, etapa)
+        orig = cv2.imread(str(execucao.imagens[f"{r.nome}_01_original.png"]), cv2.IMREAD_COLOR)[:, :, ::-1]
+        np.testing.assert_array_equal(orig, r.recorte)
+
+
+def test_imagem_do_esqueleto_e_so_preto_e_branco(execucao):
+    img = cv2.imread(str(execucao.imagens["a_07_esqueleto.png"]), cv2.IMREAD_UNCHANGED)
+    assert set(np.unique(img)) == {0, 255}
+    assert (img == 0).sum() == execucao.resultados[0].estrutura.esqueleto.sum()
+
+
+def test_resumo_json_tem_os_numeros_principais(execucao):
+    resumo = json.loads((execucao.pasta / "resumo.json").read_text(encoding="utf-8"))
+    assert resumo == json.loads(json.dumps(execucao.resumo))
+    assert resumo["audio"] == {"fs": 5000, "bits": 16, "canais": 1, "amostras": 2500, "duracao_s": 0.5}
+    assert set(resumo["paineis"]) == {"a", "b", "c"}
+    assert resumo["paineis"]["a"]["wav"]["arquivo"] == "normal.wav"
+    assert resumo["paineis"]["a"]["anotacoes_removidas"] == 9
+    assert resumo["parametros"]["sigma"] == config.SIGMA_GAUSSIANO
+
+
+def test_wav_reflete_os_parametros_de_normalizacao(tmp_path):
+    ex = pipeline.executar(saida=tmp_path, params=replace(pipeline.Parametros(), normalizacao="escala"))
+    pico_a = np.abs(audio.ler_wav(tmp_path / "audio" / "normal.wav").amostras).max()
+    pico_b = np.abs(audio.ler_wav(tmp_path / "audio" / "still.wav").amostras).max()
+    assert pico_a / pico_b == pytest.approx(ex.wavs["a"]["pico_pct"] / ex.wavs["b"]["pico_pct"], rel=0.02)
+
+
+def test_executar_e_idempotente(tmp_path):
+    pipeline.executar(saida=tmp_path)
+    antes = {p.name: p.read_bytes() for p in (tmp_path / "audio").iterdir()}
+    pipeline.executar(saida=tmp_path)
+    depois = {p.name: p.read_bytes() for p in (tmp_path / "audio").iterdir()}
+    assert antes == depois
+
+
+def test_executar_com_figura_inexistente_nao_cria_saidas(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        pipeline.executar(figura=tmp_path / "nao_existe.png", saida=tmp_path / "saida")
+    assert not (tmp_path / "saida").exists()
+
+
+def test_executar_registra_as_etapas_no_log(tmp_path, caplog):
+    with caplog.at_level("INFO"):
+        pipeline.executar(saida=tmp_path)
+    assert "3 painéis segmentados" in caplog.text
+    assert "normal.wav gravado (2500 amostras a 5000 Hz, 16 bits, mono" in caplog.text
+    assert "pronto em" in caplog.text
