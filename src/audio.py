@@ -5,12 +5,19 @@ quantizar em 16 bits -> gravar PCM mono com o módulo `wave` da biblioteca padr�
 
 Os parâmetros de áudio (5000 Hz, 16 bits, mono, 0,5 s) vêm de `src/config.py`.
 """
+import wave
+from dataclasses import dataclass
+from pathlib import Path
+
 import numpy as np
 from scipy.interpolate import CubicSpline
 
 from src import config
 
 METODOS = ("linear", "cubica")
+NORMALIZACOES = ("pico", "escala")
+ALVO_PADRAO = 0.95       # fração do fundo de escala (-0,45 dBFS), deixa folga contra clipping
+PCM_MAX = 32767          # escala simétrica: +1,0 -> 32767 e -1,0 -> -32767
 
 
 def grade_uniforme(t_ini, duracao=config.DURACAO_S, fs=config.FS_AUDIO):
@@ -52,3 +59,94 @@ def reamostrar(t, amplitude, t_ini, duracao=config.DURACAO_S, fs=config.FS_AUDIO
         y = np.interp(grade, t, amplitude)          # borda repetida fora do intervalo
         y[dentro] = CubicSpline(t, amplitude)(grade[dentro])
     return grade, y
+
+
+# ----------------------------------------------------------------------------
+# Nível DC, normalização e quantização
+# ----------------------------------------------------------------------------
+def remover_dc(y):
+    """Subtrai a média, para o áudio oscilar em torno de zero."""
+    y = np.asarray(y, dtype=np.float64)
+    return y - y.mean()
+
+
+def normalizar(y, modo="pico", alvo=ALVO_PADRAO):
+    """Ajusta o ganho do sinal (já sem DC).
+
+    modo = 'pico'   : o maior valor absoluto vira `alvo` (usa todo o intervalo de 16 bits).
+           'escala' : ganho fixo, em que 100% da escala do gráfico (amplitude 1,0) vale `alvo`.
+                      Preserva o volume relativo entre painéis diferentes.
+    Um sinal todo zero é devolvido sem alteração.
+    """
+    if modo not in NORMALIZACOES:
+        raise ValueError(f"modo deve ser um de {NORMALIZACOES}, recebido {modo!r}")
+    if not 0.0 < alvo <= 1.0:
+        raise ValueError(f"alvo deve estar em (0, 1], recebido {alvo}")
+    y = np.asarray(y, dtype=np.float64)
+    if modo == "escala":
+        return y * alvo
+    pico = np.abs(y).max()
+    return y if pico == 0 else y * (alvo / pico)
+
+
+def quantizar(y):
+    """Quantiza amostras em [-1, 1] para int16 (16 bits com sinal). Valores fora são saturados."""
+    y = np.asarray(y, dtype=np.float64)
+    if not np.isfinite(y).all():
+        raise ValueError("o sinal não pode ter NaN nem infinitos")
+    return np.clip(np.rint(y * PCM_MAX), -PCM_MAX - 1, PCM_MAX).astype(np.int16)
+
+
+def sinal_para_pcm(t, amplitude, t_ini, metodo="linear", normalizacao="pico", alvo=ALVO_PADRAO,
+                   duracao=config.DURACAO_S, fs=config.FS_AUDIO):
+    """Cadeia completa: reamostra, remove DC, normaliza e quantiza. Retorna um array int16."""
+    _, y = reamostrar(t, amplitude, t_ini, duracao, fs, metodo)
+    return quantizar(normalizar(remover_dc(y), normalizacao, alvo))
+
+
+# ----------------------------------------------------------------------------
+# Arquivos .wav (PCM, mono, 16 bits)
+# ----------------------------------------------------------------------------
+@dataclass(frozen=True)
+class InfoWav:
+    """Conteúdo e parâmetros de um arquivo .wav."""
+    taxa: int          # amostras por segundo
+    canais: int
+    bits: int
+    amostras: np.ndarray   # int16, uma coluna por canal se houver mais de um
+
+    @property
+    def n_amostras(self):
+        return int(self.amostras.shape[0])
+
+    @property
+    def duracao(self):
+        return self.n_amostras / self.taxa
+
+
+def gravar_wav(caminho, pcm, fs=config.FS_AUDIO):
+    """Grava `pcm` (int16, 1D) como WAV PCM mono de 16 bits, com o módulo `wave` da biblioteca padrão."""
+    pcm = np.asarray(pcm)
+    if pcm.dtype != np.int16 or pcm.ndim != 1:
+        raise ValueError("pcm deve ser um vetor int16 (use `quantizar`)")
+    caminho = Path(caminho)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(caminho), "wb") as arq:
+        arq.setnchannels(config.CANAIS)
+        arq.setsampwidth(config.BITS // 8)
+        arq.setframerate(int(fs))
+        arq.writeframes(pcm.astype("<i2").tobytes())      # little-endian, como exige o formato WAV
+    return caminho
+
+
+def ler_wav(caminho):
+    """Lê um .wav PCM de 16 bits e devolve um `InfoWav`."""
+    with wave.open(str(caminho), "rb") as arq:
+        canais, largura, taxa, n = arq.getnchannels(), arq.getsampwidth(), arq.getframerate(), arq.getnframes()
+        bruto = arq.readframes(n)
+    if largura != 2:
+        raise ValueError(f"esperava 16 bits por amostra, o arquivo tem {8 * largura}")
+    amostras = np.frombuffer(bruto, dtype="<i2").astype(np.int16)
+    if canais > 1:
+        amostras = amostras.reshape(-1, canais)
+    return InfoWav(taxa=taxa, canais=canais, bits=8 * largura, amostras=amostras)

@@ -91,3 +91,107 @@ def test_nao_altera_as_entradas():
     audio.reamostrar(t, y, 0.0)
     np.testing.assert_array_equal(t, t0)
     np.testing.assert_array_equal(y, y0)
+
+
+# ----------------------------------------------------------------------------
+# DC, normalização, quantização
+# ----------------------------------------------------------------------------
+def test_remover_dc_zera_a_media_e_preserva_a_forma():
+    y = np.sin(np.linspace(0, 20, 500)) + 0.3
+    r = audio.remover_dc(y)
+    assert abs(r.mean()) < 1e-12
+    np.testing.assert_allclose(r - r.mean(), y - y.mean())
+
+
+def test_normalizar_pico_leva_o_maior_valor_ao_alvo():
+    y = np.array([0.1, -0.4, 0.2, 0.05])
+    r = audio.normalizar(y, "pico", 0.9)
+    assert np.abs(r).max() == pytest.approx(0.9)
+    assert r[1] < 0                                  # o sinal do pico é mantido
+    np.testing.assert_allclose(r / y, np.full(4, 0.9 / 0.4))
+
+
+def test_normalizar_escala_preserva_a_razao_entre_sinais():
+    a, b = np.array([0.0, 0.8, -0.2]), np.array([0.0, 0.4, -0.1])
+    ra, rb = audio.normalizar(a, "escala"), audio.normalizar(b, "escala")
+    assert np.abs(ra).max() / np.abs(rb).max() == pytest.approx(2.0)
+    assert np.abs(ra).max() == pytest.approx(0.8 * audio.ALVO_PADRAO)
+
+
+def test_normalizar_silencio_nao_divide_por_zero():
+    r = audio.normalizar(np.zeros(10))
+    assert np.all(r == 0) and not np.isnan(r).any()
+
+
+@pytest.mark.parametrize("modo, alvo", [("x", 0.9), ("pico", 0.0), ("pico", 1.5), ("pico", -0.1)])
+def test_normalizar_parametros_invalidos(modo, alvo):
+    with pytest.raises(ValueError):
+        audio.normalizar(np.ones(3), modo, alvo)
+
+
+def test_quantizar_extremos_e_saturacao():
+    pcm = audio.quantizar(np.array([1.0, -1.0, 0.0, 0.5, 2.0, -3.0]))
+    assert pcm.dtype == np.int16
+    assert pcm.tolist() == [32767, -32767, 0, 16384, 32767, -32768]
+
+
+def test_quantizar_erro_menor_que_meio_degrau():
+    y = np.random.default_rng(0).uniform(-1, 1, 5000)
+    pcm = audio.quantizar(y)
+    assert np.abs(pcm / audio.PCM_MAX - y).max() <= 0.5 / audio.PCM_MAX + 1e-12
+
+
+def test_quantizar_rejeita_nan():
+    with pytest.raises(ValueError):
+        audio.quantizar(np.array([0.0, np.nan]))
+
+
+def test_sinal_para_pcm_cadeia_completa():
+    t = np.linspace(0.0015, 0.4985, 665)
+    y = 0.4 * np.sin(2 * np.pi * 40 * t) + 0.2             # com DC
+    pcm = audio.sinal_para_pcm(t, y, 0.0)
+    assert pcm.dtype == np.int16 and pcm.shape == (2500,)
+    assert abs(pcm.mean()) < 0.02 * np.abs(pcm).max()      # DC removido
+    assert np.abs(pcm).max() == pytest.approx(audio.ALVO_PADRAO * audio.PCM_MAX, abs=1)
+    assert np.abs(pcm).max() < 32767                        # sem clipping
+
+
+# ----------------------------------------------------------------------------
+# Arquivo .wav
+# ----------------------------------------------------------------------------
+def test_gravar_e_ler_wav_ida_e_volta(tmp_path):
+    pcm = audio.quantizar(np.sin(np.linspace(0, 60, 2500)) * 0.8)
+    caminho = audio.gravar_wav(tmp_path / "x.wav", pcm)
+    info = audio.ler_wav(caminho)
+    assert (info.taxa, info.canais, info.bits, info.n_amostras) == (5000, 1, 16, 2500)
+    assert info.duracao == pytest.approx(0.5)
+    np.testing.assert_array_equal(info.amostras, pcm)
+
+
+def test_wav_confere_com_leitor_independente(tmp_path):
+    from scipy.io import wavfile
+    pcm = audio.quantizar(np.cos(np.linspace(0, 40, 2500)) * 0.7)
+    caminho = audio.gravar_wav(tmp_path / "y.wav", pcm)
+    taxa, dados = wavfile.read(caminho)
+    assert taxa == 5000 and dados.dtype == np.int16
+    np.testing.assert_array_equal(dados, pcm)
+    assert caminho.stat().st_size == 44 + 2 * 2500          # cabeçalho PCM de 44 bytes + 2 bytes por amostra
+
+
+def test_gravar_wav_cria_pastas_e_rejeita_tipo_errado(tmp_path):
+    audio.gravar_wav(tmp_path / "a" / "b" / "z.wav", np.zeros(10, dtype=np.int16))
+    assert (tmp_path / "a" / "b" / "z.wav").exists()
+    with pytest.raises(ValueError):
+        audio.gravar_wav(tmp_path / "w.wav", np.zeros(10))              # float
+    with pytest.raises(ValueError):
+        audio.gravar_wav(tmp_path / "w.wav", np.zeros((10, 2), dtype=np.int16))   # 2D
+
+
+def test_ler_wav_rejeita_8_bits(tmp_path):
+    import wave
+    caminho = tmp_path / "oito.wav"
+    with wave.open(str(caminho), "wb") as arq:
+        arq.setnchannels(1), arq.setsampwidth(1), arq.setframerate(5000)
+        arq.writeframes(bytes(10))
+    with pytest.raises(ValueError):
+        audio.ler_wav(caminho)
