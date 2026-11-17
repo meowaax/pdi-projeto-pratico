@@ -26,11 +26,14 @@ SEMENTES = range(4)
 TIPOS = ("burst", "sopro", "denso")
 
 
-def comparar_regras():
-    """Média, em 4 sinais por tipo, da qualidade da reconstrução (sinal sintético conhecido)."""
+def medir_regras():
+    """Qualidade da reconstrução por tipo de sinal e regra: lista de (tipo, regra, correlação, NRMSE, razão do pico).
+
+    Média de 4 sinais sintéticos por tipo, de gabarito conhecido, comparados a 5 kHz.
+    """
     cal = synthetic.calibracao_sintetica()
-    linhas = ["| sinal | regra | correlação | erro relativo (NRMSE) | amplitude do pico (razão) |", "|---|---|---|---|---|"]
     tg = np.arange(0.002, 0.498, 1 / config.FS_AUDIO)
+    linhas = []
     for tipo in TIPOS:
         for regra in REGRAS:
             res = []
@@ -42,8 +45,14 @@ def comparar_regras():
                 e, v = e - e.mean(), v - v.mean()
                 res.append((np.corrcoef(e, v)[0, 1], np.sqrt(np.mean((e - v) ** 2) / np.mean(v ** 2)),
                             np.abs(e).max() / np.abs(v).max()))
-            c, n, p = np.mean(res, axis=0)
-            linhas.append(f"| {tipo} | {regra} | {c:.3f} | {n:.3f} | {p:.2f} |")
+            linhas.append((tipo, regra, *np.mean(res, axis=0)))
+    return linhas
+
+
+def comparar_regras():
+    """Tabela em Markdown de `medir_regras`."""
+    linhas = ["| sinal | regra | correlação | erro relativo (NRMSE) | amplitude do pico (razão) |", "|---|---|---|---|---|"]
+    linhas += [f"| {tipo} | {regra} | {c:.3f} | {n:.3f} | {p:.2f} |" for tipo, regra, c, n, p in medir_regras()]
     return "\n".join(linhas) + "\n"
 
 

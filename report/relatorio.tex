@@ -1,0 +1,55 @@
+% Relatório técnico do trabalho prático de Processamento Digital de Imagens.
+% Compilar com:  cd report && pdflatex relatorio.tex && pdflatex relatorio.tex   (ou ./compilar.sh)
+% As figuras (figuras/) e as tabelas (gerado/) vêm de `python report/gerar_figuras.py`.
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[brazilian]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric,arrows,calc}
+\usepackage[hidelinks]{hyperref}
+
+\setstretch{1.15}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0.2em}
+\captionsetup{font=small,labelfont=bf}
+\setlist{itemsep=0.15em,topsep=0.3em}
+\renewcommand{\arraystretch}{1.12}
+
+\newcommand{\Sone}{S\textsubscript{1}}
+\newcommand{\Stwo}{S\textsubscript{2}}
+
+\hypersetup{pdftitle={Reconstrução de sinais de áudio cardíacos a partir de traçados em imagem},
+            pdfauthor={Alex Tavares Cordeiro}}
+
+\begin{document}
+
+\input{secoes/00_capa}
+
+\tableofcontents
+\clearpage
+
+\input{secoes/01_introducao}
+\input{secoes/02_metodos}
+\input{secoes/03_resultados}
+\input{secoes/04_discussao}
+\input{secoes/05_conclusao}
+
+\begin{thebibliography}{9}
+\input{secoes/06_referencias}
+\end{thebibliography}
+
+\end{document}

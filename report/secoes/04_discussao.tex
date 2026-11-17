@@ -1,0 +1,36 @@
+\section{Discussão}
+
+\subsection{Problemas e dificuldades encontrados}
+
+\paragraph{A resolução da imagem limita o áudio.}
+A figura tem cerca de 1333 colunas por segundo, e uma coluna é uma amostra. Pelo critério de Nyquist, só dá para recuperar o que está abaixo de uns 667~Hz, ao passo que o artigo gravou a 8000~Hz. A especificação pede 5000~Hz, e a reamostragem para essa taxa só interpola: ela não cria detalhe, e os arquivos de 5~kHz contêm, na prática, o conteúdo de 0 a 667~Hz. O sopro de Still (120~Hz) e o do VSD (80 a 500~Hz, segundo o artigo) cabem nessa banda, e por isso a comparação ainda faz sentido. O que estiver acima de 667~Hz, em \Sone, em \Stwo{} ou em qualquer outro trecho, simplesmente não está na figura.
+
+\paragraph{O gráfico denso.}
+O gráfico (c) tem oscilações que se sobrepõem na mesma coluna. A extração devolve uma amostra por coluna, então só o envelope dessas oscilações é recuperado. No teste sintético equivalente, a correlação com o sinal original é de 0,78 e o erro relativo é de 0,67, contra 0,98 e 0,19 nos estouros isolados. Isso quer dizer que o \texttt{vsd.wav} é uma aproximação mais pobre do que o \texttt{normal.wav} e o \texttt{still.wav}. Em um experimento exploratório, fora do código final, uma extração com mais de uma amostra por coluna (o topo e a base em ordem) manteve o pico, mas acrescentou ruído de alta frequência e piorou a correlação (0,73, 0,69 e 0,46 nos três tipos de sinal sintético), e foi descartada.
+
+\paragraph{O centroide e o esqueleto não servem para extrair a amplitude.}
+O centroide da coluna erra nos picos verticais (em alguns trechos, a coluna tem mais de 100 pixels de curva), e o ponto médio entre o topo e a base perde cerca de um terço do pico. Foi preciso uma regra que preserve o extremo nas colunas de virada. O esqueleto de 1 pixel, que seria o resultado natural do afinamento pedido, erra os extremos em 3 a 8 pixels, e por isso ficou só para visualização.
+
+\paragraph{A linha de 0\% está coberta pela curva.}
+A grade horizontal mostra as linhas de $\pm25$, $\pm50$ e $\pm75\%$, mas a curva cobre a de 0\%. A posição dela vem do ajuste das linhas vizinhas, com a hipótese de que são igualmente espaçadas. Foi confirmada na única linha residual que aparece no gráfico (a), a 1 pixel do valor deduzido, mas é uma dedução, e não uma medida.
+
+\paragraph{A cor não separa a curva das anotações.}
+A curva e as anotações têm o mesmo azul. A remoção por componentes conexos funciona porque nenhuma anotação toca a curva (a mais próxima fica a 6,3 pixels). Se uma tocasse, as duas virariam um só componente, e o programa só avisaria que a curva não cobre a largura inteira, sem separá-las. A suavização gaussiana, que poderia fundir uma anotação à curva, é feita depois da remoção.
+
+\paragraph{Os níveis absolutos não são comparáveis.}
+A legenda diz que os gráficos estão normalizados, mas os picos de 93\%, 55\% e 88\% mostram que não é pelo máximo de cada trecho, e o critério não é conhecido. Só valem as razões dentro de cada sinal (por exemplo, o sopro sobre \Sone). O volume relativo entre os arquivos de áudio também se perde com a normalização por pico: o programa devolve os níveis originais para a análise, e oferece a normalização por escala, que o preserva.
+
+\paragraph{Não há áudio original para comparar.}
+O resultado não pôde ser comparado com a gravação que deu origem à figura. A validação usou sinais sintéticos de gabarito conhecido, passados por todo o pipeline, e a conferência com as afirmações do artigo. Os sinais sintéticos são mais simples do que os reais, então os erros medidos nesse teste são uma estimativa.
+
+\subsection{Comentários críticos sobre os resultados}
+
+Os resultados são consistentes entre si em vários níveis. A curva extraída coincide com o traço da figura em cada gráfico, os picos de \Sone{} e \Stwo{} do gráfico (a) batem com a leitura direta (cerca de 75\% e de 92\% a $-72\%$), o tom do sopro de Still em 120~Hz coincide com a média do artigo (118,75~Hz), e o sopro do VSD tem a banda larga que o artigo descreve, com 46\% da energia entre 200 e 500~Hz. Sete das oito afirmações conferidas se reproduzem. A que não se reproduz (o pico do VSD acima de 200~Hz) é uma estatística de 20 gravações, e aqui há uma só.
+
+Esses resultados têm limites que convém dizer. A análise cobre uma gravação de cada tipo, então ela mostra que os sinais reconstruídos são coerentes com o artigo, e não que o método classifica sopros. A localização de \Sone{} e \Stwo{} usa a posição dos rótulos da própria figura, e foi conferida contra a leitura visual dentro de 20~ms; se o layout fosse outro, a regra teria de ser revista. A audição foi informal e feita por uma só pessoa. O Normal e o VSD soaram como as medidas previam, mas o Still soou diferente do esperado: em vez de um zumbido suave entre as duas batidas, o ouvinte descreveu batidas a mais. As medidas são compatíveis com isso, pois o sopro de Still é periódico (repetição a cada 8,4~ms) e só 7,5~dB mais fraco que \Sone, mas essa explicação não foi testada com ouvintes e sons de controle.
+
+Por fim, uma observação sobre o método. A etapa mais importante para a qualidade do áudio não foi a filtragem espacial pedida pelo enunciado (a correlação com o gaussiano e o Sobel), e sim a regra de extração por coluna: a mesma máscara, extraída com o ponto médio, perde um terço da amplitude dos picos. O gaussiano e o Sobel cumprem o papel de limpar e realçar a curva, mas o $\sigma$ tem de ser pequeno (1,0), porque valores maiores alongam os picos em 5 a 18 pixels e distorcem o sinal.
+
+\subsection{Possíveis melhorias}
+
+Com uma imagem de maior resolução, ou com o sinal original, a banda recuperável seria maior. No gráfico denso, uma extração que acompanhe o traço (seguindo a curva de pixel em pixel, em vez de reduzir cada coluna a um valor) poderia recuperar oscilações que hoje se perdem. Para a análise, um teste de audição com vários ouvintes e sons de controle diria se a pulsação do sopro de Still é de fato o que se ouve como batidas extras.

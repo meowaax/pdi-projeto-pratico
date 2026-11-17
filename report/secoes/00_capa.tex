@@ -1,0 +1,27 @@
+\begin{titlepage}
+\centering
+{\large Universidade Federal da Paraíba\par}
+{\large Centro de Informática\par}
+\vspace{0.4cm}
+{\large Introdução ao Processamento Digital de Imagens --- Período 2026.2\par}
+{\large Professor: Leonardo Vidal\par}
+
+\vspace{3.2cm}
+{\LARGE\bfseries Reconstrução automática de sinais de áudio cardíacos a partir de traçados em imagem\par}
+\vspace{0.8cm}
+{\large Trabalho prático\par}
+
+\vspace{3.5cm}
+{\large Aluno: Alex Tavares Cordeiro\par}
+
+\vfill
+{\large Novembro de 2026\par}
+\end{titlepage}
+
+\begin{abstract}
+\noindent Este trabalho reconstrói, a partir de uma imagem, três sinais de áudio de sons cardíacos: um sem sopro (Normal), um com o sopro inocente de Still e um com o sopro patológico de comunicação interventricular (VSD). A imagem é a Figura~1 do artigo de Tomas et al.\ (2011), que mostra os três sinais como gráficos em função do tempo. O programa, escrito em Python, isola cada gráfico, remove a grade, os eixos, os textos e as anotações, extrai a curva, calibra o eixo do tempo e o da amplitude, e grava os arquivos \texttt{normal.wav}, \texttt{still.wav} e \texttt{vsd.wav} (5000 amostras por segundo, 16 bits, mono). A filtragem espacial usa uma função de correlação bidimensional escrita do zero, no domínio do espaço, com preenchimento por zeros. A remoção da grade usa uma medida de cor que não depende do fundo, e a extração usa uma regra por coluna que preserva a amplitude dos picos. A análise dos sinais reconstruídos reproduz sete de oito afirmações do artigo: o tom do sopro de Still fica em 120~Hz, e o sopro do VSD tem banda larga. A figura entrega 1333 colunas por segundo, o que limita o conteúdo recuperável a cerca de 667~Hz.
+
+\medskip
+\noindent\textbf{Palavras-chave:} processamento digital de imagens; correlação espacial; extração de curvas; sons cardíacos; sopro de Still; comunicação interventricular.
+\end{abstract}
+\clearpage

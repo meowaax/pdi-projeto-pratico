@@ -1,0 +1,51 @@
+\section{Introdução}
+
+\subsection{Contextualização e tema}
+
+A ausculta é a primeira ferramenta no exame do coração. Em cada batida o ouvido encontra dois sons principais: o primeiro som (\Sone), do fechamento das valvas entre os átrios e os ventrículos, e o segundo (\Stwo), do fechamento das valvas de saída. O intervalo entre eles é a sístole. Um sopro é um som extra, ouvido na sístole ou na diástole. Na sístole, ele pode ser inocente, sem doença cardíaca, ou patológico. O artigo de Tomas, Rončević e Zelenika~\cite{tomas2011} compara três casos em crianças: sem sopro (Normal), com o sopro inocente de Still e com o sopro patológico da comunicação interventricular (VSD, do inglês \emph{ventricular septal defect}). Segundo o artigo, o sopro de Still é um tom musical de banda estreita, com 90 a 170~Hz (média de 118,75~Hz), e o do VSD é um ruído áspero de banda larga, de 80 a 500~Hz.
+
+O artigo mostra os três sinais em sua Figura~1, como gráficos da amplitude em função do tempo. Eles só existem ali como imagem: uma imagem com três gráficos sobrepostos a uma grade, com eixos, números, legendas e rótulos (\Sone, \Stwo, \emph{systole}, SM, VSD). Este trabalho trata esses gráficos como imagens digitais e recupera deles os sinais de áudio. É um problema de processamento digital de imagens, porque o sinal está codificado na posição vertical de uma curva a cada coluna de pixels, e é preciso separar a curva de tudo o que a cerca.
+
+\subsection{Fundamentação teórica}
+
+\paragraph{Imagem digital e cor.}
+Uma imagem colorida em RGB é uma matriz de pixels com três canais (R, G e B), cada um com valores de 0 a 255 em 8 bits. A Figura~1 do artigo foi ampliada em 200\% e comprimida com perdas, então as bordas dos traços são suavizadas (antialiasing) e há pequenas variações de cor sobre os fundos planos. Um pixel de borda é uma mistura da cor do traço com a cor do fundo: $p = a\,c + (1-a)\,f$, em que $c$ é a cor do traço, $f$ a do fundo e $a \in [0,1]$ a cobertura do pixel pelo traço.
+
+\paragraph{Correlação e convolução bidimensionais.}
+A filtragem espacial calcula cada pixel de saída como uma soma ponderada da vizinhança do pixel de entrada. Para uma imagem $I$ e uma máscara $h$ de $M\times N$ elementos, a correlação não normalizada com preenchimento por zeros é
+\begin{equation}
+g(i,j) \;=\; \sum_{m=0}^{M-1}\sum_{n=0}^{N-1} h(m,n)\; I\bigl(i+m-a_y,\; j+n-a_x\bigr),
+\qquad a_y = \lfloor M/2\rfloor,\; a_x = \lfloor N/2\rfloor,
+\label{eq:correlacao}
+\end{equation}
+em que $I(y,x)=0$ fora da imagem. A saída tem o mesmo tamanho da entrada. A convolução é a mesma soma com a máscara girada de $180^\circ$, então as duas operações coincidem quando a máscara tem simetria central, como a média e o filtro gaussiano. Para a máscara de Sobel, que é antissimétrica, a diferença é só o sinal da resposta~\cite{gonzalez2018}.
+
+\paragraph{Filtro gaussiano e filtro de Sobel.}
+O filtro gaussiano suaviza a imagem e reduz o ruído. A máscara é a amostragem de
+\begin{equation}
+G(x,y) = \frac{1}{2\pi\sigma^2}\, e^{-(x^2+y^2)/(2\sigma^2)},
+\end{equation}
+normalizada para somar 1, o que preserva o brilho médio, com lado $2\lceil 3\sigma\rceil+1$, que cobre $\pm 3\sigma$. Ela é separável, pois $G(x,y)=G_1(x)\,G_1(y)$. O filtro de Sobel estima as derivadas parciais da imagem com duas máscaras $3\times 3$ que somam zero, de modo que a resposta é nula em regiões de brilho constante:
+\begin{equation}
+S_x=\begin{bmatrix}-1&0&1\\-2&0&2\\-1&0&1\end{bmatrix},\qquad
+S_y=S_x^{\mathsf T}=\begin{bmatrix}-1&-2&-1\\0&0&0\\1&2&1\end{bmatrix}.
+\end{equation}
+Com $g_x$ e $g_y$ as respostas, a magnitude do gradiente é $\sqrt{g_x^2+g_y^2}$ e a direção é $\operatorname{atan2}(g_y,g_x)$.
+
+\paragraph{Limiarização, componentes conexos e afinamento.}
+O método de Otsu~\cite{otsu1979} escolhe o limiar $t$ que maximiza a variância entre as duas classes de pixels que ele separa, $\sigma_B^2(t)=\omega_0(t)\,\omega_1(t)\,[\mu_0(t)-\mu_1(t)]^2$, em que $\omega_k$ e $\mu_k$ são a proporção e a média de cada classe. Os componentes conexos de uma imagem binária são os grupos de pixels ligados entre si por vizinhança de 8 pixels. O afinamento (esqueletização) reduz um traço grosso a uma linha de 1 pixel; usamos o algoritmo de Lee~\cite{lee1994}.
+
+\paragraph{Amostragem, quantização e espectro.}
+Um sinal contínuo amostrado a $f_s$ amostras por segundo só representa componentes abaixo de $f_s/2$ (frequência de Nyquist)~\cite{oppenheim2010}. Na figura, a amostragem é espacial: cada coluna de pixels é uma amostra do tempo, e a resolução horizontal da imagem limita a banda do sinal recuperável. A quantização em 16 bits (PCM com sinal) leva uma amostra $x\in[-1,1]$ ao inteiro $\operatorname{round}(32767\,x)$. O espectro de um trecho é estimado pelo periodograma com janela de Hann, $P(f)\propto|\mathrm{DFT}(x\cdot w)|^2$, e a evolução do espectro no tempo, pelo espectrograma, que é o mesmo cálculo em janelas curtas e deslizantes.
+
+\subsection{Objetivos}
+
+O objetivo geral é automatizar a extração e a reconstrução dos sinais de áudio dos três traçados da Figura~1 do artigo~\cite{tomas2011}, aplicando filtragem espacial, limiarização, remoção de elementos gráficos e amostragem de curvas. Os objetivos específicos são:
+\begin{enumerate}
+\item implementar uma função de correlação bidimensional não normalizada, com preenchimento por zeros, no domínio do espaço, sem funções prontas de correlação ou filtragem, e testá-la com as imagens fornecidas (Requisito~1);
+\item isolar automaticamente cada um dos três gráficos (Normal, Still e VSD);
+\item remover a grade, os eixos, as marcas de escala, os textos e as anotações;
+\item reduzir o ruído e realçar a estrutura da curva com a correlação do Requisito~1, com máscaras gaussianas e de Sobel;
+\item mapear os pixels da curva para o tempo e a amplitude, reamostrar a 5000 amostras por segundo e quantizar em 16 bits, em um único canal;
+\item gravar \texttt{normal.wav}, \texttt{still.wav} e \texttt{vsd.wav}, e comparar os três sinais na forma de onda, no espectro e na audição (Requisito~2).
+\end{enumerate}
