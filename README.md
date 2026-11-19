@@ -15,7 +15,8 @@ A filtragem espacial usa uma função de correlação 2D escrita do zero
 - Entrega oficial: 30/11/2026
 
 O backlog está nas [issues](https://github.com/meowaax/pdi-projeto-pratico/issues)
-do milestone "Entrega PDI".
+do milestone "Entrega PDI". A lista de entregáveis, com o que foi conferido e o que ainda
+depende do aluno, está em [`docs/entrega.md`](docs/entrega.md).
 
 ## Estrutura
 
