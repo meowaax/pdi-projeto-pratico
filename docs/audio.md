@@ -52,4 +52,4 @@ A Task 11 deve usar esses números ao comparar os sinais, não o nível dos .wav
 
 - **Banda:** a figura dá 1333 colunas por segundo, então só o que está abaixo de uns 667 Hz é recuperável. Subir para 5 kHz interpola e não cria detalhe. O artigo grava a 8 kHz.
 - **Painel c (VSD):** é o mais denso, e só o envelope da oscilação é recuperado (ver `docs/extracao_sinal.md`).
-- **Os arquivos ficam em `outputs/audio/`**, que o `.gitignore` não versiona. Entram no repositório ou no release na Task 13.
+- **Onde estão os arquivos:** `python main.py` os grava em `outputs/audio/`, que o `.gitignore` não versiona. Os três arquivos entregues ficam versionados em `audio/` (cópia dos gerados), e `tests/test_audio_versionado.py` falha se o código mudar e a cópia não for atualizada.

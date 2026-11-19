@@ -112,7 +112,7 @@ As Figuras~\ref{fig:extracao-a}, \ref{fig:extracao-b} e \ref{fig:extracao-c} mos
 
 \subsection{Arquivos de áudio}
 
-O programa grava \texttt{normal.wav}, \texttt{still.wav} e \texttt{vsd.wav} (Tabela~\ref{tab:audio}). Cada arquivo tem 2500 amostras a 5000~Hz, em 16 bits e um canal, o que dá 0,5~s e 5044 bytes (44 do cabeçalho e 5000 de dados). Os arquivos foram relidos com o módulo \texttt{wave} e com o \texttt{scipy.io.wavfile}, e os dois leram os mesmos parâmetros e as mesmas amostras. Nenhuma amostra satura (o maior valor absoluto é 0,95 do fundo de escala), a média é praticamente nula, e a correlação com o sinal extraído é maior que 0,9999. A interpolação linear erra menos que a cúbica (NRMSE 0,19 contra 0,21 nos estouros sintéticos), e a cúbica ultrapassa os picos em cerca de 10\%.
+O programa grava \texttt{normal.wav}, \texttt{still.wav} e \texttt{vsd.wav} (Tabela~\ref{tab:audio}), que também estão na pasta \texttt{audio/} do repositório. Cada arquivo tem 2500 amostras a 5000~Hz, em 16 bits e um canal, o que dá 0,5~s e 5044 bytes (44 do cabeçalho e 5000 de dados). Os arquivos foram relidos com o módulo \texttt{wave} e com o \texttt{scipy.io.wavfile}, e os dois leram os mesmos parâmetros e as mesmas amostras. Nenhuma amostra satura (o maior valor absoluto é 0,95 do fundo de escala), a média é praticamente nula, e a correlação com o sinal extraído é maior que 0,9999. A interpolação linear erra menos que a cúbica (NRMSE 0,19 contra 0,21 nos estouros sintéticos), e a cúbica ultrapassa os picos em cerca de 10\%.
 
 \begin{table}[H]
 \centering

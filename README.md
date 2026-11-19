@@ -21,6 +21,7 @@ do milestone "Entrega PDI".
 
 ```
 main.py              # pipeline completo (python main.py)
+audio/               # os três .wav entregues (normal, still, vsd)
 src/correlation.py   # Req. 1: correlação 2D manual
 src/kernels.py       # máscaras: média, Gaussiano, Sobel
 src/filters.py       # suavização e gradiente sobre a correlação manual
@@ -52,6 +53,9 @@ python main.py                  # roda tudo e grava em outputs/
 python main.py --saida pasta/   # outra pasta de saída
 pytest                          # testes
 ```
+
+Os três arquivos de áudio entregues estão em `audio/` (cópia dos que o pipeline gera).
+Se o código mudar, regenere e copie: `python main.py && cp outputs/audio/*.wav audio/`.
 
 O pipeline grava:
 
