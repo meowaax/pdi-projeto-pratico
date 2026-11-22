@@ -16,33 +16,46 @@ python demo_req1.py     # Requisito 1: filtros nas imagens de Imagens/, grava em
 `python main.py --saida pasta/` grava em outra pasta. O pipeline gera `outputs/audio/*.wav`,
 as imagens de cada etapa em `outputs/etapas/` e `outputs/resumo.json`.
 
-## Arquivos
+## Estrutura de pastas
 
-| Arquivo | Conteúdo |
-|---|---|
-| `main.py` | Pipeline completo: `Figure1.png` para `normal.wav`, `still.wav` e `vsd.wav` |
-| `demo_req1.py` | Teste do Requisito 1 com as imagens de `Imagens/` |
-| `Figure1.png` | Entrada do pipeline |
-| `Imagens/` | Imagens de teste do Requisito 1 (`Shapes.png`, `testpat.1k.color2.tif`) |
-| `audio/` | `.wav` entregues (5000 Hz, 16 bits, mono, 0,5 s) |
-| `report/relatorio.pdf` | Relatório técnico |
-| `requirements.txt` | Dependências |
-| `outputs/` | Criada ao rodar `main.py` e `demo_req1.py` (não versionada) |
-
-Código em `src/`:
-
-| Módulo | Função |
-|---|---|
-| `correlation.py` | Requisito 1: correlação 2D não normalizada com zero padding, feita do zero |
-| `kernels.py` | Máscaras: média, Gaussiana e Sobel |
-| `filters.py` | Suavização Gaussiana e gradiente de Sobel, sobre a correlação manual |
-| `roi.py` | Segmentação automática dos três gráficos (a, b, c) |
-| `cleaning.py` | Remoção de grade, eixos, textos e anotações |
-| `structure.py` | Suavização, bordas, binarização e afinamento da curva |
-| `curve.py` | Extração da curva e calibração de tempo e amplitude |
-| `audio.py` | Reamostragem a 5 kHz, quantização em 16 bits e escrita do `.wav` |
-| `pipeline.py` | Encadeia as etapas e grava as saídas |
-| `config.py` | Parâmetros (áudio, ROIs, σ, limiares) |
+```text
+.
+├── main.py                  # pipeline completo (Figure1.png -> .wav)
+├── demo_req1.py             # teste do Requisito 1 com as imagens anexas
+├── Figure1.png              # entrada do pipeline
+├── requirements.txt         # dependências
+├── README.md
+│
+├── Imagens/                 # imagens de teste do Requisito 1
+│   ├── Shapes.png
+│   └── testpat.1k.color2.tif
+│
+├── audio/                   # áudios entregues (5000 Hz, 16 bits, mono, 0,5 s)
+│   ├── normal.wav
+│   ├── still.wav
+│   └── vsd.wav
+│
+├── report/
+│   └── relatorio.pdf        # relatório técnico
+│
+├── src/                     # código do pipeline
+│   ├── correlation.py       # Requisito 1: correlação 2D manual com zero padding
+│   ├── kernels.py           # máscaras: média, Gaussiano, Sobel
+│   ├── filters.py           # suavização e gradiente sobre a correlação manual
+│   ├── roi.py               # segmentação dos três gráficos
+│   ├── cleaning.py          # remoção de grade, eixos, textos e anotações
+│   ├── structure.py         # suavização, bordas, binarização e afinamento da curva
+│   ├── curve.py             # extração da curva e calibração de tempo e amplitude
+│   ├── audio.py             # reamostragem a 5 kHz, quantização e escrita do .wav
+│   ├── pipeline.py          # encadeia as etapas e grava as saídas
+│   └── config.py            # parâmetros (áudio, ROIs, σ, limiares)
+│
+└── outputs/                 # criada ao rodar os scripts (não versionada)
+    ├── audio/               # .wav gerados por main.py
+    ├── etapas/              # imagens de cada etapa do pipeline
+    ├── resumo.json
+    └── req1/                # resultados de demo_req1.py
+```
 
 Testes, demos de cada etapa, documentação das decisões e fontes do relatório estão na
 branch `extras`.
