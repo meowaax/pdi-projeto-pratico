@@ -36,7 +36,8 @@ as imagens de cada etapa em `outputs/etapas/` e `outputs/resumo.json`.
 │   └── vsd.wav
 │
 ├── report/
-│   └── relatorio.pdf        # relatório técnico
+│   ├── relatorio.pdf        # relatório técnico
+│   └── apresentacao.pdf     # slides baseados no relatório
 │
 ├── src/                     # código do pipeline
 │   ├── correlation.py       # Requisito 1: correlação 2D manual com zero padding
